@@ -12,23 +12,37 @@ class SimpleQoS(app_manager.RyuApp):
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
-        datapath = ev.msg.datapath
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
+        msg = ev.msg
+        dp = msg.datapath
+        ofp = dp.ofproto
+        ofp_parser = dp.ofproto_parser
 
-        # Przykład: reguła dla ruchu z DSCP 46 (Expedited Forwarding)
-        match = parser.OFPMatch(ip_dscp=46)
-        actions = [parser.OFPActionOutput(ofproto.OFPP_NORMAL)]
-        self.add_flow(datapath, 10, match, actions)
+        self.logger.info(f"Połączono do switcha: datapath_id={dp.id}")
 
-        # Reguła domyślna (niskie priorytety)
-        match = parser.OFPMatch()
-        actions = [parser.OFPActionOutput(ofproto.OFPP_NORMAL)]
-        self.add_flow(datapath, 1, match, actions)
+        # Dodaj regułę table-miss (akcja: NORMAL)
+        match = ofp_parser.OFPMatch()
+        actions = [ofp_parser.OFPActionOutput(ofp.OFPP_NORMAL)]
+        inst = [ofp_parser.OFPInstructionActions(ofp.OFPIT_APPLY_ACTIONS, actions)]
+        mod = ofp_parser.OFPFlowMod(
+            datapath=dp, priority=0, match=match, instructions=inst
+        )
+        dp.send_msg(mod)
 
-    def add_flow(self, datapath, priority, match, actions):
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-        mod = parser.OFPFlowMod(datapath=datapath, priority=priority, match=match, instructions=inst)
-        datapath.send_msg(mod)
+    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+    def packet_in_handler(self, ev):
+        msg = ev.msg
+        dp = msg.datapath
+        ofp = dp.ofproto
+        ofp_parser = dp.ofproto_parser
+
+        in_port = msg.match['in_port']
+        actions = [ofp_parser.OFPActionOutput(ofp.OFPP_FLOOD)]
+
+        out = ofp_parser.OFPPacketOut(
+            datapath=dp,
+            buffer_id=msg.buffer_id,
+            in_port=in_port,
+            actions=actions,
+            data=msg.data
+        )
+        dp.send_msg(out)
