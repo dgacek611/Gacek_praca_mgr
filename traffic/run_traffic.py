@@ -32,22 +32,6 @@ def verify_stp(net, wait_sec=12):
         stp_info = sw.cmd(f'ovs-appctl stp/show {sw.name}')
         info(f'\n--- STP status for {sw.name} ---\n{stp_info}\n')
         
-def check_controllers(net, target='tcp:127.0.0.1:6653'):
-    ok = True
-    for sw in net.switches:
-        # znajdź UUID kontrolera o zadanym target
-        uuid = sw.cmd(
-            f"ovs-vsctl --bare --columns=_uuid find Controller target={target}"
-        ).strip()
-        if not uuid:
-            info(f"[WARN] {sw.name}: no Controller object for {target}\n")
-            ok = False
-            continue
-        state = sw.cmd(f"ovs-vsctl get Controller {uuid} is_connected").strip().lower()
-        if 'true' not in state:
-            info(f"[WARN] {sw.name}: controller exists but is_connected={state}\n")
-            ok = False
-    return ok
 
 def main():
     setLogLevel('info')
@@ -84,11 +68,6 @@ def main():
     #kontroler „na sztywno” na każdym bridge’u
     for sw in net.switches:
         sw.cmd(f'ovs-vsctl set-controller {sw.name} tcp:{args.controller_ip}:{args.controller_port}')
-
-    if not check_controllers(net):
-        info('\n[ERROR] Controller not connected...\n')
-        net.stop()
-        return
 
     # 3) OF13 + STP
     setup_ovs_protocols_and_stp(net, enable_stp=True)
