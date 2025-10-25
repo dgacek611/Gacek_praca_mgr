@@ -18,23 +18,14 @@ def load_topo_class(path, clsname="MyTopo"):
     mod = SourceFileLoader("user_topo", path).load_module()
     return getattr(mod, clsname)
 
-def setup_ovs_protocols_and_stp(net, enable_stp=True):
-    for sw in net.switches:
-        # OF1.3 + (opcjonalnie) STP
-        sw.cmd(f'ovs-vsctl set Bridge {sw.name} protocols=OpenFlow13')
-        if enable_stp:
-            sw.cmd(f'ovs-vsctl set Bridge {sw.name} stp_enable=true')
-
-def verify_stp(net, wait_sec=35):
-    info(f'\n=== Czekam {wait_sec}s na konwergencję STP ===\n')
-    time.sleep(wait_sec)
-    info('\n=== Weryfikacja STP (ovs-vsctl get / ovs-appctl stp/show) ===\n')
-    for sw in net.switches:
-        enabled = sw.cmd(f'ovs-vsctl get Bridge {sw.name} stp_enable').strip()
-        info(f'Bridge {sw.name} stp_enable={enabled}\n')
-    for sw in net.switches:
-        stp_info = sw.cmd(f'ovs-appctl stp/show {sw.name}')
-        info(f'\n--- STP status for {sw.name} ---\n{stp_info}\n')
+def ping_all_n(net, count=3, pause=0.5):
+    losses = []
+    for _ in range(count):
+        losses.append(net.pingAll())
+        time.sleep(pause)
+    avg = sum(losses) / len(losses)
+    info(f'PingAll (x{count}) losses: {losses} -> avg={avg}%\n')
+    return avg
 
 def main():
     setLogLevel('info')
@@ -66,17 +57,14 @@ def main():
 
     net.start()
 
-    # Wymuś kontroler na każdym bridge’u (gdyby OVS startował bez kontrolera)
+    # 3) Kontroler na każdym bridge’u
     for sw in net.switches:
         sw.cmd(f'ovs-vsctl set-controller {sw.name} tcp:{args.controller_ip}:{args.controller_port}')
-
-    # 3) OF1.3 + STP
-    setup_ovs_protocols_and_stp(net, enable_stp=True)
-    verify_stp(net, wait_sec=35)
+    time.sleep(2)
 
     # 4) Szybki sanity-check
     info('\n=== Szybki pingAll (sanity) ===\n')
-    loss = net.pingAll()
+    loss = ping_all_n(net, count=3)
     info(f'PingAll loss: {loss}%\n')
 
     h1, h2 = net.get('h1', 'h2')

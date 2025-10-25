@@ -6,4 +6,4 @@ sudo -E python3 /media/sf_Gacek_praca_mgr/traffic/run_traffic.py --topo-file /me
 T2:
 sudo systemctl restart openvswitch-switch
 sudo mn -c
-ryu-manager --verbose --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
+ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
