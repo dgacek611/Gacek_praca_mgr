@@ -1,0 +1,33 @@
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=68.719s, table=0, n_packets=148, n_bytes=8880, priority=65535,dl_dst=01:80:c2:00:00:0e,dl_type=0x88cc actions=CONTROLLER:65535
+ cookie=0x0, duration=68.911s, table=0, n_packets=11, n_bytes=770, priority=10000,ipv6 actions=drop
+ cookie=0x0, duration=68.911s, table=0, n_packets=0, n_bytes=0, priority=30000,dl_type=0x88cc actions=drop
+ cookie=0x0, duration=68.911s, table=0, n_packets=389497, n_bytes=578725939, priority=1 actions=goto_table:1
+ cookie=0x0, duration=68.886s, table=0, n_packets=0, n_bytes=0, priority=0 actions=CONTROLLER:65535
+ cookie=0x0, duration=64.643s, table=1, n_packets=583, n_bytes=72643, idle_timeout=20, priority=100,dl_dst=fe:fb:bb:18:4b:63 actions=output:1
+ cookie=0x0, duration=64.632s, table=1, n_packets=388908, n_bytes=578652932, idle_timeout=20, priority=100,dl_dst=8a:20:00:64:44:43 actions=output:2
+ cookie=0x0, duration=68.886s, table=1, n_packets=6, n_bytes=364, priority=0 actions=CONTROLLER:65535
+OFPT_FEATURES_REPLY (xid=0x2): dpid:0000000000000001
+n_tables:254, n_buffers:0
+capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
+actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
+ 1(s1-eth1): addr:ae:6d:85:92:a8:89
+     config:     0
+     state:      0
+     current:    10GB-FD COPPER
+     speed: 10000 Mbps now, 0 Mbps max
+ 2(s1-eth2): addr:ae:84:f7:6d:ae:ff
+     config:     0
+     state:      0
+     current:    10GB-FD COPPER
+     speed: 10000 Mbps now, 0 Mbps max
+ 3(s1-eth3): addr:76:7b:1b:d2:a9:2f
+     config:     0
+     state:      0
+     current:    10GB-FD COPPER
+     speed: 10000 Mbps now, 0 Mbps max
+ LOCAL(s1): addr:96:b6:b7:d7:40:45
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max
+OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0

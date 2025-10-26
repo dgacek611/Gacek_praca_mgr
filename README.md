@@ -15,6 +15,13 @@ sudo systemctl restart openvswitch-switch
 sudo mn -c
 ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
 
+Raport:
+
+python3 plot_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251026_131851   --out-prefix /media/sf_Gacek_praca_mgr/logs/a_20251026_131851
+
+python3 analyze_baseline.py   --run-dir /media/Gacek_praca_mgr/logs/a_20251026_131851   --out-dir /media/sf_Gacek_praca_mgr/logs/a_20251026_131851
+
+
 A. Baseline (BEZ QoS)
     -cel: pokazać, że samo ustawienie DSCP w pakietach bez kolejek/meters nie daje priorytetu. Wszystkie klasy konkurują Best-Effort.
     -co zmierze:
