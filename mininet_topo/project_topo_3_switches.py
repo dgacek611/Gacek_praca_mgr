@@ -10,12 +10,12 @@ class MyTopo(Topo):
         s3 = self.addSwitch('s3')
 
         # Access (szerokie) – bez bw/use_htb (zero warningów); delay opcjonalny
-        self.addLink(h1, s1, delay='1ms')
-        self.addLink(s2, h2, delay='1ms')
+        self.addLink(h1, s1)
+        self.addLink(s2, h2)
 
         # Rdzeń – szeroki (bez rate), alternatywna ścieżka
-        self.addLink(s1, s2, delay='5ms')
-        self.addLink(s1, s3, delay='5ms')
-        self.addLink(s3, s2, delay='5ms')
+        self.addLink(s1, s2)
+        self.addLink(s1, s3)
+        self.addLink(s3, s2)
 
 topos = {'mytopo': (lambda: MyTopo())}
