@@ -1,0 +1,4 @@
+class,throughput_rx_Mbps,jitter_ms,loss_pct
+EF,7.304,5.365,62.284
+AF31,6.704,8.939,66.309
+BE,7.253,10.795,63.415
