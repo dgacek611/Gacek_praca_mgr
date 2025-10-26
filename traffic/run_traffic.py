@@ -1,221 +1,310 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-run_traffic.py — uruchamia testy EF/AF/BE, zbiera logi do współdzielonego folderu.
-
-Struktura logów:
-  /media/sf_Gacek_praca_mgr/logs/<SCENARIO>_YYYYmmdd_HHMMSS/
-    clients/   -> ef.json, af31.json, be.json, ping.txt
-    servers/   -> srv_ef.log, srv_af31.log, srv_be.log
-    switch/    -> s1_flows.txt, s2_flows.txt, s3_flows.txt, <port>_tc.txt...
-    pcap/      -> *.pcap (opcjonalnie)
-    meta.txt   -> parametry biegu
-
-WYMAGANIA:
-- Mininet + OVS + iperf3
-- Topologia w pliku podanym przez --topo-file z nazwą topo 'mytopo' (jak w project_topo_3_switches.py)
+run_traffic.py — uruchamia testy EF/AF/BE i zbiera logi.
+(…reszta komentarza bez zmian…)
 """
 
 import argparse
+import importlib.util
 import os
+import subprocess
+import sys
 import time
 from datetime import datetime
-from importlib.machinery import SourceFileLoader
 
 from mininet.net import Mininet
 from mininet.node import RemoteController, OVSSwitch
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
-from mininet.clean import cleanup
 
-# Porty iperf3
-EF_PORT   = 5201
-AF31_PORT = 5202
-BE_PORT   = 5203
+# ========================= USTAWIENIA DOMYŚLNE =========================
+BOTTLENECK_DEV_DEFAULT = "s2-eth2"
+BOTTLENECK_RATE_DEFAULT = "20mbit"
+IPERF_EF_MBIT = 5
+IPERF_AF_MBIT = 20
+IPERF_BE_MBIT = 50
 
-# DSCP: EF=0xB8 (46), AF31=0x68 (26), BE=0x00
-EF_DSCP_HEX   = "0xB8"
-AF31_DSCP_HEX = "0x68"
-BE_DSCP_HEX   = "0x00"
+DSCP_EF = 46
+DSCP_AF31 = 26
+DSCP_BE = 0
 
+# ========================= NARZĘDZIA POMOCNICZE =========================
+def sh(cmd: str, check=False):
+    return subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=check)
 
-def load_topo(topo_file_path):
-    """Dynamicznie ładuje plik topologii i zwraca instancję topos['mytopo']()."""
-    mod = SourceFileLoader("user_topo", topo_file_path).load_module()
-    if not hasattr(mod, "topos") or "mytopo" not in mod.topos:
-        raise RuntimeError("W pliku topologii nie znaleziono topos['mytopo'].")
-    topo_callable = mod.topos["mytopo"]
-    topo = topo_callable()
+def load_topo_from_file(path):
+    spec = importlib.util.spec_from_file_location("user_topo", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore
+    topo = None
+    if hasattr(mod, "topos") and isinstance(mod.topos, dict) and "mytopo" in mod.topos:
+        topo = mod.topos["mytopo"]()
+    elif hasattr(mod, "MyTopo"):
+        topo = mod.MyTopo()
+    if topo is None:
+        raise RuntimeError("Nie znaleziono topologii 'mytopo' ani klasy MyTopo w pliku.")
     return topo
 
+def make_dirs(base, scenario):
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_dir = os.path.join(base, f"{scenario}_{ts}")
+    client_dir = os.path.join(run_dir, "clients")
+    server_dir = os.path.join(run_dir, "servers")
+    switch_dir = os.path.join(run_dir, "switch")
+    pcap_dir = os.path.join(run_dir, "pcap")
+    os.makedirs(client_dir, exist_ok=True)
+    os.makedirs(server_dir, exist_ok=True)
+    os.makedirs(switch_dir, exist_ok=True)
+    os.makedirs(pcap_dir, exist_ok=True)
+    return run_dir, client_dir, server_dir, switch_dir, pcap_dir
+
+def scenario_to_qos_mode(s: str) -> str:
+    s = s.lower()
+    if s.startswith("a"):
+        return "none"
+    if s.startswith("b"):
+        return "hfsc"
+    if s.startswith("c"):
+        return "meter"
+    return "none"
+
+def clear_ovs_qos(dev: str):
+    sh(f"ovs-vsctl -- --if-exists clear port {dev} qos")
+    sh("ovs-vsctl -- --all destroy QoS -- --all destroy Queue")
+
+def destroy_tc_root(dev: str):
+    sh(f"tc qdisc del dev {dev} root 2>/dev/null")
+
+def apply_tbf(dev: str, rate: str, burst="20kb", latency="50ms"):
+    destroy_tc_root(dev)
+    sh(f"tc qdisc add dev {dev} root tbf rate {rate} burst {burst} latency {latency}")
+
+def apply_hfsc(dev: str, linkspeed_bits: int, queues):
+    clear_ovs_qos(dev)
+    parts = [
+        "ovs-vsctl -- ",
+        f"set port {dev} qos=@qos -- ",
+        f"--id=@qos create QoS type=linux-hfsc other-config:linkspeed={linkspeed_bits} "
+    ]
+    for qid in sorted(queues.keys()):
+        parts.append(f"queues:{qid}=@q{qid} ")
+    parts.append("-- ")
+    for qid, lim in queues.items():
+        parts.append(f"--id=@q{qid} create queue other-config:min-rate={lim['min']} other-config:max-rate={lim['max']} -- ")
+    cmd = "".join(parts).rstrip(" -- ")
+    r = sh(cmd)
+    if r.returncode != 0:
+        raise RuntimeError(f"OVS HFSC error: {r.stdout}")
+
+def add_meters_of13(bridge: str, meters):
+    sh(f"ovs-ofctl -O OpenFlow13 del-meters {bridge}")
+    for mid, p in meters.items():
+        kbps = int(p["rate"] * 1000)
+        burst_kb = int(p["burst"] * 1000)
+        sh(f"ovs-ofctl -O OpenFlow13 add-meter {bridge} meter={mid},kbps,band=type=drop,rate={kbps},burst_size={burst_kb}")
+
+def dev_to_bridge(dev: str) -> str:
+    return dev.split("-")[0]
+
+def setup_qos_for_scenario(scenario: str, bottleneck_dev: str, bottleneck_rate: str):
+    mode = scenario_to_qos_mode(scenario)
+    os.environ["QOS_MODE"] = mode
+
+    dev = bottleneck_dev
+    bridge = dev_to_bridge(dev)
+
+    clear_ovs_qos(dev)
+    destroy_tc_root(dev)
+
+    if mode == "none":
+        apply_tbf(dev, bottleneck_rate)
+        info(f"[QoS] A/Baseline: TBF {bottleneck_rate} na {dev}\n")
+    elif mode == "hfsc":
+        rate_bits = int(bottleneck_rate.replace("mbit", "")) * 1_000_000
+        queues = {
+            0: {"min": 1_000_000,  "max": rate_bits},   # BE
+            1: {"min": 5_000_000,  "max": rate_bits},   # AF
+            2: {"min": 15_000_000, "max": rate_bits},   # EF
+        }
+        apply_hfsc(dev, linkspeed_bits=rate_bits, queues=queues)
+        info(f"[QoS] B/HFSC: 3 kolejki na {dev} (EF=2, AF=1, BE=0)\n")
+    elif mode == "meter":
+        meters = {
+            1: {"rate": 15, "burst": 1},   # EF
+            2: {"rate":  5, "burst": 1},   # AF
+            3: {"rate": 20, "burst": 2},   # BE
+        }
+        add_meters_of13(bridge, meters)
+        info(f"[QoS] C/METERS: add-meter na {bridge} (EF=1, AF=2, BE=3)\n")
+    else:
+        info(f"[QoS] Nieznany tryb: {mode} — pomijam\n")
+
+    return mode
+
+def start_pcap(ifaces_csv: str, out_dir: str):
+    ifaces = [i.strip() for i in ifaces_csv.split(",") if i.strip()]
+    pids = []
+    for iface in ifaces:
+        pcap = os.path.join(out_dir, f"{iface}.pcap")
+        cmd = f"tcpdump -i {iface} -w {pcap} -U -s 96 not arp and not icmp & echo $!"
+        r = sh(cmd)
+        try:
+            pid = int(r.stdout.strip().splitlines()[-1])
+            pids.append(pid)
+        except Exception:
+            pass
+    return pids
+
+def stop_pcap(pids):
+    for pid in pids:
+        sh(f"kill -2 {pid} 2>/dev/null")
+
+def start_iperf_servers(h2, server_dir):
+    ports = [5201, 5202, 5203]
+    for p in ports:
+        h2.cmd(f'nohup iperf3 -s -p {p} > {server_dir}/srv_{p}.log 2>&1 &')
+    return {5201: "srv_ef.log", 5202: "srv_af31.log", 5203: "srv_be.log"}
+
+def run_iperf_clients(h1, client_dir, duration):
+    flows = [
+        {"name": "ef",   "port": 5201, "mbit": IPERF_EF_MBIT,  "dscp": DSCP_EF},
+        {"name": "af31", "port": 5202, "mbit": IPERF_AF_MBIT,  "dscp": DSCP_AF31},
+        {"name": "be",   "port": 5203, "mbit": IPERF_BE_MBIT,  "dscp": DSCP_BE},
+    ]
+    for f in flows:
+        tos = f["dscp"] << 2
+        out_json = os.path.join(client_dir, f'{f["name"]}.json')
+        cmd = (
+            f'iperf3 -c 10.0.0.2 -p {f["port"]} -u -b {f["mbit"]}M -t {duration} '
+            f'-J --get-server-output --tos {tos} --logfile {out_json} &'
+        )
+        h1.cmd(cmd)
+
+def run_ping(h1, client_dir, duration):
+    count = max(1, int(duration * 10))
+    h1.cmd(f'ping 10.0.0.2 -D -i 0.1 -c {count} > {os.path.join(client_dir, "ping.txt")} 2>&1 &')
+
+def dump_switch_state(switch_dir, dump_ports_csv):
+    for sw in ("s1", "s2", "s3"):
+        sh(f'ovs-ofctl -O OpenFlow13 dump-flows {sw} > {os.path.join(switch_dir, f"{sw}_flows.txt")}')
+        sh(f'ovs-ofctl show {sw} >> {os.path.join(switch_dir, f"{sw}_flows.txt")}')
+    ports = [p.strip() for p in dump_ports_csv.split(",") if p.strip()]
+    for dev in ports:
+        sh(f'tc -s qdisc show dev {dev} > {os.path.join(switch_dir, f"{dev}_tc.txt")}')
+        sh(f'tc -s class show dev {dev} > {os.path.join(switch_dir, f"{dev}_tc_class.txt")}')
+
+def print_dump_flows():
+    """Pomocniczy podgląd dump-flows w konsoli."""
+    for sw in ("s1", "s2", "s3"):
+        info(f"\n--- dump-flows {sw} ---\n")
+        r = sh(f'ovs-ofctl -O OpenFlow13 dump-flows {sw}')
+        info(r.stdout if r.stdout else "(brak)\n")
 
 def ping_all_n(net, count=1):
-    """Prosty pingAll N-razy, zwraca średnią utratę w %."""
     total_loss = 0.0
     for _ in range(count):
         loss = net.pingAll()
         total_loss += loss
     return total_loss / max(1, count)
 
-
-def make_dirs(base, scenario):
-    """Tworzy strukturę katalogów dla biegu i zwraca ścieżki."""
-    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_dir    = os.path.join(base, f"{scenario}_{ts}")
-    client_dir = os.path.join(run_dir, "clients")
-    server_dir = os.path.join(run_dir, "servers")
-    switch_dir = os.path.join(run_dir, "switch")
-    pcap_dir   = os.path.join(run_dir, "pcap")
-    for d in (run_dir, client_dir, server_dir, switch_dir, pcap_dir):
-        os.makedirs(d, exist_ok=True)
-    return run_dir, client_dir, server_dir, switch_dir, pcap_dir
-
-
-def start_servers(h2, server_dir):
-    """Startuje 3 serwery iperf3 na h2 i loguje do server_dir."""
-    # ubij stare serwery
-    h2.cmd('pkill -f "iperf3 -s" || true')
-    # odpal w tle (-D = daemon, --logfile)
-    h2.cmd(f'iperf3 -s -p {EF_PORT}   -D --logfile {server_dir}/srv_ef.log')
-    h2.cmd(f'iperf3 -s -p {AF31_PORT} -D --logfile {server_dir}/srv_af31.log')
-    h2.cmd(f'iperf3 -s -p {BE_PORT}   -D --logfile {server_dir}/srv_be.log')
-    time.sleep(0.4)
-
-
-def start_clients(h1, h2ip, D, client_dir):
-    """Startuje 3 klientów iperf3 z DSCP i JSON-em do client_dir + ping w tle."""
-    # Ping RTT co 100 ms
-    h1.cmd(f'ping -D -i 0.1 -w {D} {h2ip} > {client_dir}/ping.txt 2>&1 &')
-
-    flows = [
-        ("EF (DSCP 46, 5M UDP, :5201)",
-         f'iperf3 -c {h2ip} -u -b 5M  -t {D} -S {EF_DSCP_HEX}   -p {EF_PORT}   -J --logfile {client_dir}/ef.json --get-server-output &'),
-        ("AF31 (DSCP 26, 20M UDP, :5202)",
-         f'iperf3 -c {h2ip} -u -b 20M -t {D} -S {AF31_DSCP_HEX} -p {AF31_PORT} -J --logfile {client_dir}/af31.json --get-server-output &'),
-        ("BE (DSCP 0, 50M UDP, :5203)",
-         f'iperf3 -c {h2ip} -u -b 50M -t {D} -S {BE_DSCP_HEX}   -p {BE_PORT}   -J --logfile {client_dir}/be.json --get-server-output &'),
-    ]
-
-    info('\n=== Start klientów iperf3 ===\n')
-    for desc, cmd in flows:
-        info(f'  -> {desc}\n')
-        h1.cmd(cmd)
-
-
-def dump_switch_state(switch_dir, dump_ports):
-    """Zrzuca flowy OVS i (jeśli podano) statystyki kolejek TC."""
-    os.system(f'ovs-ofctl -O OpenFlow13 dump-flows s1 > {switch_dir}/s1_flows.txt')
-    os.system(f'ovs-ofctl -O OpenFlow13 dump-flows s2 > {switch_dir}/s2_flows.txt')
-    os.system(f'ovs-ofctl -O OpenFlow13 dump-flows s3 > {switch_dir}/s3_flows.txt')
-
-    if dump_ports:
-        for p in dump_ports.split(','):
-            p = p.strip()
-            if p:
-                os.system(f'tc -s qdisc show dev {p} > {switch_dir}/{p}_tc.txt')
-
-
-def start_pcap(pcap_dir, pcap_ifs):
-    """Opcjonalnie startuje tcpdump na zadanych interfejsach. Zwraca listę pidów."""
-    pids = []
-    if not pcap_ifs:
-        return pids
-    for idx, iface in enumerate([i.strip() for i in pcap_ifs.split(',') if i.strip()]):
-        pcap_path = os.path.join(pcap_dir, f'cap_{idx+1}_{iface}.pcap')
-        # -U: unbuffered, -s 120: snaplen
-        os.system(f'tcpdump -i {iface} -w {pcap_path} -s 120 -U & echo $! >> {pcap_dir}/tcpdump.pids')
-        pids.append(iface)
-    return pids
-
-
-def stop_pcap(pcap_dir):
-    """Zatrzymuje tcpdump-y z pidów zapisanych w tcpdump.pids."""
-    pidfile = os.path.join(pcap_dir, 'tcpdump.pids')
-    if os.path.exists(pidfile):
-        with open(pidfile) as f:
-            pids = [ln.strip() for ln in f if ln.strip().isdigit()]
-        for pid in pids:
-            os.system(f'kill {pid} 2>/dev/null || true')
-
-
+# ========================= GŁÓWNY PRZEPŁYW =========================
 def main():
-    parser = argparse.ArgumentParser(description="Ruch EF/AF/BE + logowanie do shared folderu.")
-    parser.add_argument('--topo-file', required=True, help='Ścieżka do pliku z topologią Mininet (topos["mytopo"])')
-    parser.add_argument('--controller-ip', default='127.0.0.1', help='IP kontrolera Ryu/SDN')
-    parser.add_argument('--controller-port', type=int, default=6653, help='Port kontrolera')
-    parser.add_argument('--duration', type=int, default=30, help='Czas testu w sekundach')
-    parser.add_argument('--scenario', default='baseline', help='Etykieta scenariusza (A/B/C/D/E lub własna)')
-    parser.add_argument('--log-dir', default='/media/sf_Gacek_praca_mgr/logs', help='Katalog bazowy na logi')
-    parser.add_argument('--dump-ports', default='s2-eth2', help='Lista interfejsów OVS do tc -s (CSV), np. "s2-eth2,s3-eth2"')
-    parser.add_argument('--pcap-ifs', default='', help='Lista interfejsów do przechwytywania (CSV), puste = wyłączone')
-    parser.add_argument('--open-cli', action='store_true', help='Wejście do CLI Mininet po sanity check')
+    parser = argparse.ArgumentParser(description="SDN QoS test runner (EF/AF/BE).")
+    parser.add_argument("--topo-file", required=True)
+    parser.add_argument("--controller-ip", default="127.0.0.1")
+    parser.add_argument("--controller-port", type=int, default=6653)
+    parser.add_argument("--duration", type=int, default=30)
+    parser.add_argument("--scenario", required=True)
+    parser.add_argument("--log-dir", required=True)
+    parser.add_argument("--dump-ports", default=BOTTLENECK_DEV_DEFAULT)
+    parser.add_argument("--pcap-ifs", default="")
+    parser.add_argument("--bottleneck-dev", default=BOTTLENECK_DEV_DEFAULT)
+    parser.add_argument("--bottleneck-rate", default=BOTTLENECK_RATE_DEFAULT)
     args = parser.parse_args()
 
     setLogLevel('info')
 
-    # 1) Import topologii i budowa sieci
-    topo = load_topo(args.topo_file)
-    net = Mininet(topo=topo,
-                  controller=None,
-                  switch=OVSSwitch,
-                  link=TCLink,
-                  autoSetMacs=True)
+    topo = load_topo_from_file(args.topo_file)
 
-    ctrl = net.addController('c0', controller=RemoteController,
-                             ip=args.controller_ip, port=args.controller_port)
+    net = Mininet(
+        topo=topo,
+        controller=None,
+        link=TCLink,
+        switch=OVSSwitch,
+        cleanup=True
+    )
+    c0 = net.addController(
+        name='c0',
+        controller=RemoteController,
+        ip=args.controller_ip,
+        port=args.controller_port
+    )
 
-    # 2) Start sieci
+    info('*** Creating network\n')
     net.start()
-    time.sleep(1.0)
+    info('*** Starting controller\n')
+    c0.start()
 
-    # 3) (opcjonalne) jawne ustawienie kontrolera w OVS
-    for sw in net.switches:
-        sw.cmd(f'ovs-vsctl set-controller {sw.name} tcp:{args.controller_ip}:{args.controller_port}')
-    time.sleep(1.0)
+    mode = setup_qos_for_scenario(args.scenario, args.bottleneck_dev, args.bottleneck_rate)
 
-    # 4) Sanity: pingAll
+    h1 = net.get('h1')
+    h2 = net.get('h2')
+
     info('\n=== Szybki pingAll (sanity) ===\n')
     loss = ping_all_n(net, count=3)
     info(f'PingAll loss ~ {loss}%\n')
 
-    # 5) Przygotowanie katalogów logów
+    # >>> PODGLĄD FLOWÓW PO STARCIU <<<
+    print_dump_flows()
+
     run_dir, client_dir, server_dir, switch_dir, pcap_dir = make_dirs(args.log_dir, args.scenario)
     info(f'\n=== Katalog biegu: {run_dir} ===\n')
 
-    # 6) Hosty i katalogi po stronie hostów
-    h1 = net.get('h1')
-    h2 = net.get('h2')
-    h1.cmd(f'mkdir -p {client_dir}')
-    h2.cmd(f'mkdir -p {server_dir}')
+    pcap_pids = []
+    if args.pcap_ifs.strip():
+        pcap_pids = start_pcap(args.pcap_ifs, pcap_dir)
 
-    # 7) Start serwerów i (opcjonalnie) PCAP
-    start_servers(h2, server_dir)
-    started_pcaps = start_pcap(pcap_dir, args.pcap_ifs)
+    info('\n=== Start klientów iperf3 ===\n')
+    srv_map = start_iperf_servers(h2, server_dir)
+    time.sleep(1.0)
 
-    # 8) Start klientów (3 równoległe strumienie + ping)
-    D = int(args.duration)
-    start_clients(h1, h2.IP(), D, client_dir)
+    info('  -> EF (DSCP 46, 5M UDP, :5201)\n')
+    info('  -> AF31 (DSCP 26, 20M UDP, :5202)\n')
+    info('  -> BE (DSCP 0, 50M UDP, :5203)\n')
+    run_iperf_clients(h1, client_dir, args.duration)
+    run_ping(h1, client_dir, args.duration)
 
-    # 9) Czas trwania testu
-    time.sleep(D + 2)
+    time.sleep(args.duration + 2)
 
-    # 10) Zrzuty OVS/TC
     dump_switch_state(switch_dir, args.dump_ports)
 
-    # 11) Zatrzymanie PCAP (jeśli było)
-    stop_pcap(pcap_dir)
+    # >>> PODGLĄD FLOWÓW NA KONIEC BIEGU <<<
+    print_dump_flows()
 
-    # 12) Metryczka
-    with open(os.path.join(run_dir, 'meta.txt'), 'w') as f:
+    with open(os.path.join(run_dir, "meta.txt"), "w") as f:
         f.write(f'scenario={args.scenario}\n')
-        f.write(f'duration_s={D}\n')
+        f.write(f'duration_s={args.duration}\n')
         f.write(f'controller={args.controller_ip}:{args.controller_port}\n')
-        f.write(f'h1={h1.IP()} h2={h2.IP()}\n')
+        f.write('h1_ip=10.0.0.1\nh2_ip=10.0.0.2\n')
+        f.write(f'bottleneck_dev={args.bottleneck_dev}\n')
+        f.write(f'bottleneck_rate={args.bottleneck_rate}\n')
+        f.write(f'qos_mode={mode}\n')
         f.write(f'dump_ports={args.dump_ports}\n')
         f.write(f'pcap_ifs={args.pcap_ifs}\n')
 
-    # 13) Sprzątanie iperfów i Minineta
+    if pcap_pids:
+        stop_pcap(pcap_pids)
+
     info('\n=== Sprzątanie iperf3 ===\n')
     h1.cmd('pkill -f "iperf3 -c" || true')
     h2.cmd('pkill -f "iperf3 -s" || true')
+
+    try:
+        clear_ovs_qos(args.bottleneck_dev)
+        destroy_tc_root(args.bottleneck_dev)
+    except Exception:
+        pass
 
     net.stop()
     info(f'\n=== KONIEC. Logi w: {run_dir} ===\n')
