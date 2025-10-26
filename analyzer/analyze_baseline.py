@@ -30,24 +30,53 @@ def parse_iperf(stream: Dict[str, Any]) -> Tuple[float, float, float]:
         return (float("nan"), float("nan"), float("nan"))
 
 def parse_ping_txt(path: str) -> Dict[str, float]:
-    stats = {"rtt_min_ms": float("nan"), "rtt_avg_ms": float("nan"),
-             "rtt_max_ms": float("nan"), "rtt_mdev_ms": float("nan"),
-             "packet_loss_pct": float("nan")}
+    import math, statistics as stats
+    out = {
+        "rtt_min_ms": float("nan"),
+        "rtt_avg_ms": float("nan"),
+        "rtt_max_ms": float("nan"),
+        # iputils podaje mdev (mean deviation), my damy przybliżenie: stdev
+        "rtt_mdev_ms": float("nan"),
+        "packet_loss_pct": float("nan"),
+    }
     try:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             txt = f.read()
-        m_loss = re.search(r"(\d+(?:\.\d+)?)% packet loss", txt)
+
+        # 1) jeśli są klasyczne statystyki — użyj ich
+        m_stats = re.search(
+            r"=\s*([\d.,]+)\s*/\s*([\d.,]+)\s*/\s*([\d.,]+)(?:\s*/\s*([\d.,]+))?\s*ms",
+            txt, re.IGNORECASE)
+        m_loss  = re.search(r"(\d+(?:[.,]\d+)?)\s*%\s*(?:packet\s*loss|strat|perte|perdidos)", 
+                            txt, re.IGNORECASE)
+        if m_stats:
+            out["rtt_min_ms"] = float(m_stats.group(1).replace(",", "."))
+            out["rtt_avg_ms"] = float(m_stats.group(2).replace(",", "."))
+            out["rtt_max_ms"] = float(m_stats.group(3).replace(",", "."))
+            if m_stats.group(4):
+                out["rtt_mdev_ms"] = float(m_stats.group(4).replace(",", "."))
         if m_loss:
-            stats["packet_loss_pct"] = float(m_loss.group(1))
-        m = re.search(r"rtt [a-z/]+= ([\d\.]+)/([\d\.]+)/([\d\.]+)/([\d\.]+) ms", txt)
-        if m:
-            stats["rtt_min_ms"] = float(m.group(1))
-            stats["rtt_avg_ms"] = float(m.group(2))
-            stats["rtt_max_ms"] = float(m.group(3))
-            stats["rtt_mdev_ms"] = float(m.group(4))
+            out["packet_loss_pct"] = float(m_loss.group(1).replace(",", "."))
+
+        # 2) Fallback: policz z pojedynczych odpowiedzi (Twój przypadek)
+        if math.isnan(out["rtt_avg_ms"]) or math.isnan(out["packet_loss_pct"]):
+            times = [float(x.replace(",", ".")) 
+                     for x in re.findall(r"time=([\d.,]+)\s*ms", txt)]
+            seqs  = [int(x) for x in re.findall(r"icmp_seq\s*=\s*(\d+)", txt, re.IGNORECASE)]
+            if times:
+                out["rtt_min_ms"] = min(times)
+                out["rtt_avg_ms"] = sum(times)/len(times)
+                out["rtt_max_ms"] = max(times)
+                if len(times) > 1:
+                    out["rtt_mdev_ms"] = stats.pstdev(times)  # dobre przybliżenie
+            if seqs:
+                sent_est = max(seqs) - min(seqs) + 1  # zakładamy ciągłą numerację
+                rcvd = len(seqs)
+                if sent_est > 0:
+                    out["packet_loss_pct"] = max(0.0, 100.0 * (1.0 - rcvd / sent_est))
     except Exception:
         pass
-    return stats
+    return out
 
 def detect_tbf_ifaces(switch_dir: str) -> List[str]:
     if not os.path.isdir(switch_dir):
