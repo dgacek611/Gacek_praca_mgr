@@ -44,7 +44,7 @@ class QoSTreeController(app_manager.RyuApp):
             if mode in ("hfsc", "htb"):
                 actions = [p.OFPActionSetQueue(spec["queue"])]
                 inst = [
-                    p.OFPInstructionActions(ofp.OFPIT_APPLY_ACTIONS, actions),
+                    p.OFPInstructionActions(ofp.OFPIT_WRITE_ACTIONS, actions),
                     p.OFPInstructionGotoTable(1),
                 ]
             else:  # meter
@@ -329,7 +329,7 @@ class QoSTreeController(app_manager.RyuApp):
             # Table 1: match dl_dst -> OUTPUT out_port
             match = p.OFPMatch(eth_dst=dst)
             actions = [p.OFPActionOutput(out_port)]
-            inst = [p.OFPInstructionActions(ofp.OFPIT_APPLY_ACTIONS, actions)]
+            inst = [p.OFPInstructionActions(ofp.OFPIT_WRITE_ACTIONS, actions)]
 
             mod = p.OFPFlowMod(
                 datapath=dp,

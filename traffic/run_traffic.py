@@ -25,9 +25,9 @@ from mininet.log import setLogLevel, info
 BOTTLENECK_DEV_DEFAULT = "s2-eth2"
 BOTTLENECK_RATE_DEFAULT = "20mbit"
 
-IPERF_EF_MBIT = 5
+IPERF_EF_MBIT = 20
 IPERF_AF_MBIT = 20
-IPERF_BE_MBIT = 50
+IPERF_BE_MBIT = 20
 
 DSCP_EF = 46
 DSCP_AF31 = 26
@@ -148,7 +148,7 @@ def apply_hfsc(dev: str, linkspeed_bits: int, queues: Dict[int, Dict[str, int]])
         raise RuntimeError(f"OVS HFSC error: {r.stdout}")
 
 
-def apply_htb(dev: str, queues: Dict[int, Dict[str, int]]) -> None:
+def apply_htb(dev: str, queues: Dict[int, Dict[str, int]], linkspeed_bits: int = None) -> None:
     """Konfiguruje kolejki linux-htb w OVS (min/max-rate per queue)."""
     clear_ovs_qos(dev)
 
@@ -157,6 +157,9 @@ def apply_htb(dev: str, queues: Dict[int, Dict[str, int]]) -> None:
         f"set port {dev} qos=@qos -- ",
         "--id=@qos create QoS type=linux-htb ",
     ]
+    # Opcjonalny root cap (other-config:max-rate) dla HTB
+    if linkspeed_bits is not None:
+        parts[2] = parts[2].rstrip() + f" other-config:max-rate={linkspeed_bits} "
     for qid in sorted(queues.keys()):
         parts.append(f"queues:{qid}=@q{qid} ")
     parts.append("-- ")
@@ -228,11 +231,11 @@ def setup_qos_for_scenario(scenario: str, bottleneck_dev: str, bottleneck_rate: 
     elif mode == "htb":
         rate_bits = int(bottleneck_rate.replace("mbit", "")) * 1_000_000
         queues = {
-            0: {"min": 1_000_000,  "max": rate_bits},   # BE
-            1: {"min": 5_000_000,  "max": rate_bits},   # AF
-            2: {"min": 15_000_000, "max": rate_bits},   # EF
+            0: {"min": 1_000_000,  "max": 1_000_000},   # BE (1 Mbit)
+            1: {"min": 4_000_000,  "max": 4_000_000},   # AF (4 Mbit)
+            2: {"min": 15_000_000, "max": 15_000_000},  # EF (15 Mbit)
         }
-        apply_htb(dev, queues=queues)
+        apply_htb(dev, queues=queues, linkspeed_bits=rate_bits)
         info(f"[QoS] B/HTB: 3 kolejki na {dev} (EF=2, AF=1, BE=0)\n")
 
     else:
@@ -311,6 +314,7 @@ def dump_switch_state(switch_dir: str, dump_ports_csv: str) -> None:
     for dev in ports:
         sh(f'tc -s qdisc show dev {dev} > {os.path.join(switch_dir, f"{dev}_tc.txt")}')
         sh(f'tc -s class show dev {dev} > {os.path.join(switch_dir, f"{dev}_tc_class.txt")}')
+        sh(f'ovs-appctl qos/show {dev} > {os.path.join(switch_dir, f"{dev}_qos.txt")}')
 
 
 def print_dump_flows() -> None:
@@ -345,6 +349,11 @@ def main() -> None:
     parser.add_argument("--bottleneck-dev", default=BOTTLENECK_DEV_DEFAULT)
     parser.add_argument("--bottleneck-rate", default=BOTTLENECK_RATE_DEFAULT)
     args = parser.parse_args()
+
+    # Jeżeli użytkownik nie wskazał dump-ports, użyj interfejsu wąskiego gardła
+    if args.dump_ports == BOTTLENECK_DEV_DEFAULT and args.bottleneck_dev != BOTTLENECK_DEV_DEFAULT:
+        args.dump_ports = args.bottleneck_dev
+
 
     setLogLevel("info")
 
