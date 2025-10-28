@@ -113,7 +113,7 @@ class QoSTreeController(app_manager.RyuApp):
         ofp = dp.ofproto
         p = dp.ofproto_parser
         actions = [p.OFPActionOutput(ofp.OFPP_CONTROLLER, ofp.OFPCML_NO_BUFFER)]
-        inst = [p.OFPInstructionActions(ofp.OFPIT_APPLY_ACTIONS, actions)]
+        inst = [p.OFPInstructionActions(ofp.OFPIT_WRITE_ACTIONS, actions)]
         dp.send_msg(p.OFPFlowMod(
             datapath=dp, table_id=table_id, priority=0,
             match=p.OFPMatch(), instructions=inst

@@ -5,15 +5,26 @@ sudo -E python3 /media/sf_Gacek_praca_mgr/traffic/run_traffic.py \
   --topo-file /media/sf_Gacek_praca_mgr/mininet_topo/project_topo_3_switches.py \
   --controller-ip 127.0.0.1 --controller-port 6653 \
   --duration 60 \
-  --scenario B_HTB \
+  --scenario a \
   --log-dir /media/sf_Gacek_praca_mgr/logs \
-  --dump-ports s2-eth2 \
+  --dump-ports s2-eth1 \
+  --pcap-ifs ""
+
+sudo -E python3 /media/sf_Gacek_praca_mgr/traffic/run_traffic.py \
+  --topo-file /media/sf_Gacek_praca_mgr/mininet_topo/project_topo_3_switches.py \
+  --controller-ip 127.0.0.1 --controller-port 6653 \
+  --duration 60 \
+  --scenario b \
+  --log-dir /media/sf_Gacek_praca_mgr/logs \
+  --bottleneck-dev s2-eth1 \
+  --bottleneck-rate 20mbit \
+  --dump-ports s2-eth1 \
   --pcap-ifs ""
 
 T2:
 sudo systemctl restart openvswitch-switch
 sudo mn -c
-ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
+QOS_MODE=htb ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
 
 Raport:
 
@@ -21,6 +32,7 @@ python3 plot_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251026_1
 
 python3 analyze_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251026_131851   --out-dir /media/sf_Gacek_praca_mgr/logs/a_20251026_131851
 
+python3 b_analyze_diffserv_htb.py   --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251028_204151 --out-dir /media/sf_Gacek_praca_mgr/logs/b_20251028_204151
 
 A. Baseline (BEZ QoS)
     -cel: pokazać, że samo ustawienie DSCP w pakietach bez kolejek/meters nie daje priorytetu. Wszystkie klasy konkurują Best-Effort.

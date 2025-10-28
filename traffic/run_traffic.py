@@ -136,10 +136,15 @@ def apply_hfsc(dev: str, linkspeed_bits: int, queues: Dict[int, Dict[str, int]])
     parts.append("-- ")
 
     for qid, lim in queues.items():
+        # Ustaw dodatkowy burst, żeby HTB nie dławił throughputu przy UDP
+        burst = lim.get('burst', 150000)  # bytes
+        prio = lim.get('priority')
+        prio_str = f" other-config:priority={prio}" if prio is not None else ""
         parts.append(
             f"--id=@q{qid} create queue "
             f"other-config:min-rate={lim['min']} "
-            f"other-config:max-rate={lim['max']} -- "
+            f"other-config:max-rate={lim['max']} "
+            f"other-config:burst={burst}" + prio_str + " -- "
         )
 
     cmd = "".join(parts).rstrip(" -- ")
@@ -165,10 +170,15 @@ def apply_htb(dev: str, queues: Dict[int, Dict[str, int]], linkspeed_bits: int =
     parts.append("-- ")
 
     for qid, lim in queues.items():
+        # Ustaw dodatkowy burst, żeby HTB nie dławił throughputu przy UDP
+        burst = lim.get('burst', 150000)  # bytes
+        prio = lim.get('priority')
+        prio_str = f" other-config:priority={prio}" if prio is not None else ""
         parts.append(
             f"--id=@q{qid} create queue "
             f"other-config:min-rate={lim['min']} "
-            f"other-config:max-rate={lim['max']} -- "
+            f"other-config:max-rate={lim['max']} "
+            f"other-config:burst={burst}" + prio_str + " -- "
         )
 
     cmd = "".join(parts).rstrip(" -- ")
@@ -194,6 +204,21 @@ def dev_to_bridge(dev: str) -> str:
     return dev.split("-")[0]
 
 
+
+def disable_offloads(dev: str) -> None:
+    """Wyłącza TSO/GSO/GRO/LRO na porcie (lepsza powtarzalność w Mininecie)."""
+    cmds = [
+        f"ethtool -K {dev} tso off",
+        f"ethtool -K {dev} gso off",
+        f"ethtool -K {dev} gro off",
+        f"ethtool -K {dev} lro off || true",  # nie wszędzie wspierane
+    ]
+    for c in cmds:
+        try:
+            sh(c)
+        except Exception:
+            pass
+
 def setup_qos_for_scenario(scenario: str, bottleneck_dev: str, bottleneck_rate: str) -> str:
     """Ustawia tryb QoS dla podanego scenariusza i zwraca nazwę trybu."""
     mode = scenario_to_qos_mode(scenario)
@@ -204,6 +229,12 @@ def setup_qos_for_scenario(scenario: str, bottleneck_dev: str, bottleneck_rate: 
 
     clear_ovs_qos(dev)
     destroy_tc_root(dev)
+
+    # Wyłącz offloady na wąskim gardle, by nie obchodzić qdisc
+    try:
+        disable_offloads(dev)
+    except Exception:
+        pass
 
     if mode == "none":
         apply_tbf(dev, bottleneck_rate)
@@ -231,9 +262,9 @@ def setup_qos_for_scenario(scenario: str, bottleneck_dev: str, bottleneck_rate: 
     elif mode == "htb":
         rate_bits = int(bottleneck_rate.replace("mbit", "")) * 1_000_000
         queues = {
-            0: {"min": 1_000_000,  "max": 1_000_000},   # BE (1 Mbit)
-            1: {"min": 4_000_000,  "max": 4_000_000},   # AF (4 Mbit)
-            2: {"min": 15_000_000, "max": 15_000_000},  # EF (15 Mbit)
+            0: {"min": 1_000_000,  "max": 1_000_000,  "priority": 0, "burst": 150000},  # BE (1 Mbit)
+            1: {"min": 4_000_000,  "max": 4_000_000,  "priority": 1, "burst": 200000},  # AF (4 Mbit)
+            2: {"min": 15_000_000, "max": 15_000_000, "priority": 2, "burst": 250000},  # EF (15 Mbit)
         }
         apply_htb(dev, queues=queues, linkspeed_bits=rate_bits)
         info(f"[QoS] B/HTB: 3 kolejki na {dev} (EF=2, AF=1, BE=0)\n")
@@ -401,9 +432,10 @@ def main() -> None:
     _ = start_iperf_servers(h2, server_dir)
     time.sleep(1.0)
 
-    info("  -> EF (DSCP 46, 5M UDP, :5201)\n")
-    info("  -> AF31 (DSCP 26, 20M UDP, :5202)\n")
-    info("  -> BE (DSCP 0, 50M UDP, :5203)\n")
+    info(f"  -> EF (DSCP 46, {IPERF_EF_MBIT}M UDP, :5201)")
+    info(f"  -> AF31 (DSCP 26, {IPERF_AF_MBIT}M UDP, :5202)")
+    info(f"  -> BE (DSCP 0, {IPERF_BE_MBIT}M UDP, :5203)")
+
     run_iperf_clients(h1, client_dir, args.duration)
     run_ping(h1, client_dir, args.duration)
 
