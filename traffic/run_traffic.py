@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-run_traffic.py — uruchamia testy EF/AF/BE i zbiera logi.
-"""
-
-from __future__ import annotations
-
 import argparse
 import importlib.util
 import os
@@ -20,7 +12,7 @@ from mininet.node import RemoteController, OVSSwitch
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 
-# ========================= USTAWIENIA DOMYŚLNE =========================
+# ============================ STAŁE DOMYŚLNE ==================================
 
 BOTTLENECK_DEV_DEFAULT = "s2-eth2"
 BOTTLENECK_RATE_DEFAULT = "20mbit"
@@ -33,23 +25,17 @@ DSCP_EF = 46
 DSCP_AF31 = 26
 DSCP_BE = 0
 
-
-# ========================= NARZĘDZIA POMOCNICZE =========================
-
+# ============================ POMOCNICZE SH/IO ================================
 def sh(cmd: str, check: bool = False) -> subprocess.CompletedProcess:
-    """Uruchamia komendę powłoki i zwraca wynik."""
+    """Uruchamia komendę powłoki i zwraca CompletedProcess (stdout w .stdout)."""
     return subprocess.run(
-        cmd,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        check=check,
+        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, check=check
     )
 
 
 def load_topo_from_file(path: str):
-    """Ładuje topologię z pliku (topos['mytopo'] albo klasa MyTopo)."""
+    """Ładuje topologię z pliku: preferuje topos['mytopo'], fallback: klasa MyTopo."""
     spec = importlib.util.spec_from_file_location("user_topo", path)
     mod = importlib.util.module_from_spec(spec)  # type: ignore
     spec.loader.exec_module(mod)  # type: ignore
@@ -61,18 +47,18 @@ def load_topo_from_file(path: str):
         topo = mod.MyTopo()
 
     if topo is None:
-        raise RuntimeError("Nie znaleziono topologii 'mytopo' ani klasy MyTopo w pliku.")
+        raise RuntimeError("Nie znalazłem topologii 'mytopo' ani klasy MyTopo w pliku.")
     return topo
 
 
 def _timestamp_utc_plus_1() -> str:
-    """Zwraca znacznik czasu jako UTC+1 (stały offset, bez DST)."""
+    """Zwraca timestamp (UTC+1 bez DST) w formacie YYYYmmdd_HHMMSS."""
     tz_plus1 = timezone(timedelta(hours=1))
     return datetime.now(timezone.utc).astimezone(tz_plus1).strftime("%Y%m%d_%H%M%S")
 
 
 def make_dirs(base: str, scenario: str) -> Tuple[str, str, str, str, str]:
-    """Tworzy katalogi na logi i zwraca ich ścieżki."""
+    """Tworzy katalogi logów i zwraca tuple: (run, clients, servers, switch, pcap)."""
     ts = _timestamp_utc_plus_1()
     run_dir = os.path.join(base, f"{scenario}_{ts}")
     client_dir = os.path.join(run_dir, "clients")
@@ -84,12 +70,12 @@ def make_dirs(base: str, scenario: str) -> Tuple[str, str, str, str, str]:
     os.makedirs(server_dir, exist_ok=True)
     os.makedirs(switch_dir, exist_ok=True)
     os.makedirs(pcap_dir, exist_ok=True)
-
     return run_dir, client_dir, server_dir, switch_dir, pcap_dir
 
 
+# =========================== MAPOWANIE SCENARIUSZY ============================
 def scenario_to_qos_mode(s: str) -> str:
-    """Mapuje scenariusz A/B/C na tryb QoS."""
+    """A/B/C -> tryb QoS dla kontrolera (ENV QOS_MODE)."""
     s = s.lower()
     if s.startswith("a"):
         return "none"
@@ -105,25 +91,26 @@ def scenario_to_qos_mode(s: str) -> str:
     return "none"
 
 
+# ============================ KONFIG OVS/TC ===================================
 def clear_ovs_qos(dev: str) -> None:
-    """Czyści konfigurację QoS/Queue na porcie OVS."""
+    """Czyści QoS/Queue na porcie OVS (żeby poprzednie testy nie przeszkadzały)."""
     sh(f"ovs-vsctl -- --if-exists clear port {dev} qos")
     sh("ovs-vsctl -- --all destroy QoS -- --all destroy Queue")
 
 
 def destroy_tc_root(dev: str) -> None:
-    """Usuwa qdisc root (jeśli istnieje)."""
+    """Usuwa root qdisc (jak istnieje)."""
     sh(f"tc qdisc del dev {dev} root 2>/dev/null")
 
 
 def apply_tbf(dev: str, rate: str, burst: str = "20kb", latency: str = "50ms") -> None:
-    """Ustawia prosty TBF do sztucznego wąskiego gardła."""
+    """Ustawia prosty TBF (wąskie gardło) na wskazanym interfejsie."""
     destroy_tc_root(dev)
     sh(f"tc qdisc add dev {dev} root tbf rate {rate} burst {burst} latency {latency}")
 
 
 def apply_hfsc(dev: str, linkspeed_bits: int, queues: Dict[int, Dict[str, int]]) -> None:
-    """Konfiguruje kolejki linux-hfsc w OVS (min/max-rate per queue)."""
+    """Konfiguruje linux-hfsc w OVS: min/max-rate per kolejka (EF/AF/BE)."""
     clear_ovs_qos(dev)
 
     parts: List[str] = [
@@ -136,7 +123,7 @@ def apply_hfsc(dev: str, linkspeed_bits: int, queues: Dict[int, Dict[str, int]])
     parts.append("-- ")
 
     for qid, lim in queues.items():
-        # Ustaw dodatkowy burst, żeby HTB nie dławił throughputu przy UDP
+        # Dajemy „burst”, żeby UDP nie dławił się przy krótkich bucketach
         burst = lim.get('burst', 150000)  # bytes
         prio = lim.get('priority')
         prio_str = f" other-config:priority={prio}" if prio is not None else ""
@@ -154,7 +141,7 @@ def apply_hfsc(dev: str, linkspeed_bits: int, queues: Dict[int, Dict[str, int]])
 
 
 def apply_htb(dev: str, queues: Dict[int, Dict[str, int]], linkspeed_bits: int = None) -> None:
-    """Konfiguruje kolejki linux-htb w OVS (min/max-rate per queue)."""
+    """Konfiguruje linux-htb w OVS: min/max-rate per kolejka (EF/AF/BE)."""
     clear_ovs_qos(dev)
 
     parts: List[str] = [
@@ -162,7 +149,7 @@ def apply_htb(dev: str, queues: Dict[int, Dict[str, int]], linkspeed_bits: int =
         f"set port {dev} qos=@qos -- ",
         "--id=@qos create QoS type=linux-htb ",
     ]
-    # Opcjonalny root cap (other-config:max-rate) dla HTB
+    # Opcjonalny „global cap” (max-rate) na root HTB
     if linkspeed_bits is not None:
         parts[2] = parts[2].rstrip() + f" other-config:max-rate={linkspeed_bits} "
     for qid in sorted(queues.keys()):
@@ -170,7 +157,6 @@ def apply_htb(dev: str, queues: Dict[int, Dict[str, int]], linkspeed_bits: int =
     parts.append("-- ")
 
     for qid, lim in queues.items():
-        # Ustaw dodatkowy burst, żeby HTB nie dławił throughputu przy UDP
         burst = lim.get('burst', 150000)  # bytes
         prio = lim.get('priority')
         prio_str = f" other-config:priority={prio}" if prio is not None else ""
@@ -188,7 +174,7 @@ def apply_htb(dev: str, queues: Dict[int, Dict[str, int]], linkspeed_bits: int =
 
 
 def add_meters_of13(bridge: str, meters: Dict[int, Dict[str, int]]) -> None:
-    """Dodaje metery OpenFlow 1.3 (typ drop, kbps)."""
+    """Tworzy metery OF1.3 (band=drop, kbps)"""
     sh(f"ovs-ofctl -O OpenFlow13 del-meters {bridge}")
     for mid, p in meters.items():
         kbps = int(p["rate"] * 1000)
@@ -200,27 +186,27 @@ def add_meters_of13(bridge: str, meters: Dict[int, Dict[str, int]]) -> None:
 
 
 def dev_to_bridge(dev: str) -> str:
-    """Zamienia nazwę interfejsu (np. s2-eth2) na nazwę bridge'a (s2)."""
+    """Z „s2-eth2” robi „s2” (nazwa bridge’a w OVS)."""
     return dev.split("-")[0]
 
 
-
 def disable_offloads(dev: str) -> None:
-    """Wyłącza TSO/GSO/GRO/LRO na porcie (lepsza powtarzalność w Mininecie)."""
-    cmds = [
+    """Wyłącza TSO/GSO/GRO/LRO (w Mininecie to zwykle pomaga na powtarzalność)."""
+    for c in [
         f"ethtool -K {dev} tso off",
         f"ethtool -K {dev} gso off",
         f"ethtool -K {dev} gro off",
-        f"ethtool -K {dev} lro off || true",  # nie wszędzie wspierane
-    ]
-    for c in cmds:
+        f"ethtool -K {dev} lro off || true",  # nie wszędzie jest LRO
+    ]:
         try:
             sh(c)
         except Exception:
             pass
 
+
+# ============================ SCENARIUSZE QoS =================================
 def setup_qos_for_scenario(scenario: str, bottleneck_dev: str, bottleneck_rate: str) -> str:
-    """Ustawia tryb QoS dla podanego scenariusza i zwraca nazwę trybu."""
+    """Ustawia ENV dla kontrolera i konfigurację OVS/TC na porcie wąskiego gardła."""
     mode = scenario_to_qos_mode(scenario)
     os.environ["QOS_MODE"] = mode
 
@@ -230,7 +216,7 @@ def setup_qos_for_scenario(scenario: str, bottleneck_dev: str, bottleneck_rate: 
     clear_ovs_qos(dev)
     destroy_tc_root(dev)
 
-    # Wyłącz offloady na wąskim gardle, by nie obchodzić qdisc
+    # lepiej wyłączyć offloady na porcie, na którym dławi TBF/kolejki
     try:
         disable_offloads(dev)
     except Exception:
@@ -275,11 +261,11 @@ def setup_qos_for_scenario(scenario: str, bottleneck_dev: str, bottleneck_rate: 
     return mode
 
 
+# ============================ GENEROWANIE RUCHU ===============================
 def start_pcap(ifaces_csv: str, out_dir: str) -> List[int]:
-    """Startuje tcpdump na wskazanych interfejsach i zwraca PIDs."""
+    """Startuje tcpdump (-U, -s 96); zwraca listę PID-ów, żeby można było to ubić."""
     ifaces = [i.strip() for i in ifaces_csv.split(",") if i.strip()]
     pids: List[int] = []
-
     for iface in ifaces:
         pcap = os.path.join(out_dir, f"{iface}.pcap")
         cmd = f"tcpdump -i {iface} -w {pcap} -U -s 96 not arp and not icmp & echo $!"
@@ -289,18 +275,17 @@ def start_pcap(ifaces_csv: str, out_dir: str) -> List[int]:
             pids.append(pid)
         except Exception:
             pass
-
     return pids
 
 
 def stop_pcap(pids: List[int]) -> None:
-    """Wysyła SIGINT do uruchomionych tcpdumpów."""
+    """Wysyła SIGINT do działających tcpdumpów (ładnie się domykają)."""
     for pid in pids:
         sh(f"kill -2 {pid} 2>/dev/null")
 
 
 def start_iperf_servers(h2, server_dir: str) -> Dict[int, str]:
-    """Uruchamia serwery iperf3 na h2."""
+    """Stawia iperf3 -s na portach 5201/5202/5203 na hoście h2 (log do servers/)."""
     ports = [5201, 5202, 5203]
     for p in ports:
         h2.cmd(f'nohup iperf3 -s -p {p} > {server_dir}/srv_{p}.log 2>&1 &')
@@ -308,7 +293,7 @@ def start_iperf_servers(h2, server_dir: str) -> Dict[int, str]:
 
 
 def run_iperf_clients(h1, client_dir: str, duration: int) -> None:
-    """Uruchamia klientów iperf3 na h1 dla EF/AF/BE (UDP, DSCP)."""
+    """Odpala iperf3 -u z DSCP (EF/AF31/BE), zapis JSON do clients/."""
     flows = [
         {"name": "ef",   "port": 5201, "mbit": IPERF_EF_MBIT, "dscp": DSCP_EF},
         {"name": "af31", "port": 5202, "mbit": IPERF_AF_MBIT, "dscp": DSCP_AF31},
@@ -325,20 +310,16 @@ def run_iperf_clients(h1, client_dir: str, duration: int) -> None:
 
 
 def run_ping(h1, client_dir: str, duration: int) -> None:
-    """Szybki ping do h2 (log RTT/jitter)."""
+    """Prosty ping (co 0.1s) do h2; zapis do clients/ping.txt."""
     count = max(1, int(duration * 10))
-    h1.cmd(
-        f'ping 10.0.0.2 -D -i 0.1 -c {count} > {os.path.join(client_dir, "ping.txt")} 2>&1 &'
-    )
+    h1.cmd(f'ping 10.0.0.2 -D -i 0.1 -c {count} > {os.path.join(client_dir, "ping.txt")} 2>&1 &')
 
 
+# ============================== DIAGNOSTYKA ===================================
 def dump_switch_state(switch_dir: str, dump_ports_csv: str) -> None:
-    """Zrzuca flowy OVS i statystyki qdisc/class dla wybranych portów."""
+    """Zrzuca flowy OVS (s1/s2/s3) + statystyki qdisc/class + ovs-appctl qos/show."""
     for sw in ("s1", "s2", "s3"):
-        sh(
-            f'ovs-ofctl -O OpenFlow13 dump-flows {sw} > '
-            f'{os.path.join(switch_dir, f"{sw}_flows.txt")}'
-        )
+        sh(f'ovs-ofctl -O OpenFlow13 dump-flows {sw} > {os.path.join(switch_dir, f"{sw}_flows.txt")}')
         sh(f'ovs-ofctl show {sw} >> {os.path.join(switch_dir, f"{sw}_flows.txt")}')
 
     ports = [p.strip() for p in dump_ports_csv.split(",") if p.strip()]
@@ -349,7 +330,7 @@ def dump_switch_state(switch_dir: str, dump_ports_csv: str) -> None:
 
 
 def print_dump_flows() -> None:
-    """Wypisuje dump-flows dla s1/s2/s3 do konsoli (podgląd)."""
+    """Wypisuje dump-flows dla s1/s2/s3 (na konsole – szybki podgląd)."""
     for sw in ("s1", "s2", "s3"):
         info(f"\n--- dump-flows {sw} ---\n")
         r = sh(f'ovs-ofctl -O OpenFlow13 dump-flows {sw}')
@@ -357,77 +338,66 @@ def print_dump_flows() -> None:
 
 
 def ping_all_n(net: Mininet, count: int = 1) -> float:
-    """Uruchamia pingAll kilka razy i zwraca średni loss w %."""
+    """Mininet pingAll kilka razy; zwraca uśredniony loss (%)."""
     total_loss = 0.0
     for _ in range(count):
-        loss = net.pingAll()
-        total_loss += loss
+        total_loss += net.pingAll()
     return total_loss / max(1, count)
 
 
-# ========================= GŁÓWNY PRZEPŁYW =========================
-
+# ============================== GŁÓWNY PRZEPŁYW ===============================
 def main() -> None:
     parser = argparse.ArgumentParser(description="SDN QoS test runner (EF/AF/BE).")
-    parser.add_argument("--topo-file", required=True)
+    parser.add_argument("--topo-file", required=True, help="Plik z topologią (MyTopo albo topos['mytopo']).")
     parser.add_argument("--controller-ip", default="127.0.0.1")
     parser.add_argument("--controller-port", type=int, default=6653)
     parser.add_argument("--duration", type=int, default=30)
-    parser.add_argument("--scenario", required=True)
-    parser.add_argument("--log-dir", required=True)
-    parser.add_argument("--dump-ports", default=BOTTLENECK_DEV_DEFAULT)
-    parser.add_argument("--pcap-ifs", default="")
-    parser.add_argument("--bottleneck-dev", default=BOTTLENECK_DEV_DEFAULT)
-    parser.add_argument("--bottleneck-rate", default=BOTTLENECK_RATE_DEFAULT)
+    parser.add_argument("--scenario", required=True, help="A | B | B_HTB | B_HFSC | C")
+    parser.add_argument("--log-dir", required=True, help="Gdzie zapisać logi z biegu.")
+    parser.add_argument("--dump-ports", default=BOTTLENECK_DEV_DEFAULT, help="CSV interfejsów do zrzutów tc/qos.")
+    parser.add_argument("--pcap-ifs", default="", help="CSV interfejsów do tcpdump (opcjonalnie).")
+    parser.add_argument("--bottleneck-dev", default=BOTTLENECK_DEV_DEFAULT, help="Interfejs „wąskiego gardła” (np. s2-eth2).")
+    parser.add_argument("--bottleneck-rate", default=BOTTLENECK_RATE_DEFAULT, help="Przepływność TBF (np. 20mbit).")
     args = parser.parse_args()
 
-    # Jeżeli użytkownik nie wskazał dump-ports, użyj interfejsu wąskiego gardła
+    # Jeżeli użytkownik nie wskazał dump-ports, bierzemy interfejs wąskiego gardła
     if args.dump_ports == BOTTLENECK_DEV_DEFAULT and args.bottleneck_dev != BOTTLENECK_DEV_DEFAULT:
         args.dump_ports = args.bottleneck_dev
 
-
     setLogLevel("info")
 
+    # --- start Minineta ---
     topo = load_topo_from_file(args.topo_file)
-
-    net = Mininet(
-        topo=topo,
-        controller=None,
-        link=TCLink,
-        switch=OVSSwitch,
-        cleanup=True
-    )
-    c0 = net.addController(
-        name="c0",
-        controller=RemoteController,
-        ip=args.controller_ip,
-        port=args.controller_port
-    )
+    net = Mininet(topo=topo, controller=None, link=TCLink, switch=OVSSwitch, cleanup=True)
+    c0 = net.addController(name="c0", controller=RemoteController, ip=args.controller_ip, port=args.controller_port)
 
     info("*** Creating network\n")
     net.start()
     info("*** Starting controller\n")
     c0.start()
 
+    # --- konfiguracja scenariusza (OVS/TC + ENV dla kontrolera) ---
     mode = setup_qos_for_scenario(args.scenario, args.bottleneck_dev, args.bottleneck_rate)
 
-    h1 = net.get("h1")
-    h2 = net.get("h2")
-
+    # --- sanity ping między hostami ---
+    h1, h2 = net.get("h1"), net.get("h2")
     info("\n=== Szybki pingAll (sanity) ===\n")
     loss = ping_all_n(net, count=3)
     info(f"PingAll loss ~ {loss}%\n")
 
-    # Podgląd flowów po starcie
+    # podgląd flowów „na start”
     print_dump_flows()
 
+    # --- katalogi biegu ---
     run_dir, client_dir, server_dir, switch_dir, pcap_dir = make_dirs(args.log_dir, args.scenario)
     info(f"\n=== Katalog biegu: {run_dir} ===\n")
 
+    # --- tcpdump (opcjonalnie) ---
     pcap_pids: List[int] = []
     if args.pcap_ifs.strip():
         pcap_pids = start_pcap(args.pcap_ifs, pcap_dir)
 
+    # --- ruchek: iperf3 + ping ---
     info("\n=== Start klientów iperf3 ===\n")
     _ = start_iperf_servers(h2, server_dir)
     time.sleep(1.0)
@@ -439,13 +409,16 @@ def main() -> None:
     run_iperf_clients(h1, client_dir, args.duration)
     run_ping(h1, client_dir, args.duration)
 
+    # czekamy aż iperfy dojadą
     time.sleep(args.duration + 2)
 
+    # --- zrzuty z OVS/tc ---
     dump_switch_state(switch_dir, args.dump_ports)
 
-    # Podgląd flowów na koniec biegu
+    # podgląd flowów „na koniec”
     print_dump_flows()
 
+    # --- meta-info o biegu ---
     with open(os.path.join(run_dir, "meta.txt"), "w") as f:
         f.write(f"scenario={args.scenario}\n")
         f.write(f"duration_s={args.duration}\n")
@@ -457,6 +430,7 @@ def main() -> None:
         f.write(f"dump_ports={args.dump_ports}\n")
         f.write(f"pcap_ifs={args.pcap_ifs}\n")
 
+    # --- sprzątanie ---
     if pcap_pids:
         stop_pcap(pcap_pids)
 
@@ -474,5 +448,6 @@ def main() -> None:
     info(f"\n=== KONIEC. Logi w: {run_dir} ===\n")
 
 
+# =============================================================================
 if __name__ == "__main__":
     main()
