@@ -7,6 +7,8 @@
 
 	python3 b_analyze_diffserv_htb.py   --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251029_171914 --out-dir /media/sf_Gacek_praca_mgr/logs/b_20251029_171914
 
+    python3 c_analyze_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251029_173015 --out-dir /media/sf_Gacek_praca_mgr/logs/c_20251029_173015
+
 1. START VM
 	source mgr_sdn/bin/activate
 	sudo mount -t vboxsf Gacek_praca_mgr /media/sf_Gacek_praca_mgr
