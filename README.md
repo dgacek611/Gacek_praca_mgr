@@ -92,7 +92,7 @@ C) Policing (OpenFlow meters) — cięcie nadmiaru, nie zmiana trasy
 
 D) DiffServ + MPLS (push/pop + EXP) i tryby tunelowania
 
--cel:zademonstrować mapowanie DSCP↔EXP (mpls_tc) i trzy tryby: Uniform, Short-Pipe, Pipe. Warstwa MPLS nie musi „polepszyć” samych metryk jakości — ona przenosi klasę w rdzeniu i pozwala na polityki w core.
+-cel: zademonstrować mapowanie DSCP↔EXP (mpls_tc) i trzy tryby: Uniform, Short-Pipe, Pipe. Warstwa MPLS nie musi „polepszyć” samych metryk jakości — ona przenosi klasę w rdzeniu i pozwala na polityki w core.
 -co zmierze:
 	-oprawność oznakowania
 	-zachowanie trybów: czy po wyjściu z tunelu DSCP wraca (Uniform), pozostaje oryginalny (Short-Pipe), albo jest niezależny (Pipe).
@@ -102,7 +102,7 @@ D) DiffServ + MPLS (push/pop + EXP) i tryby tunelowania
 
 E) Selekcja ścieżek per klasa (SDN routing) + awaria
 
--cel:rozdzielić klasy na różne ścieżki (np. EF krótszą s1–s2, AF/BE przez s3) i/lub dodać Fast-Failover dla EF
+-cel: rozdzielić klasy na różne ścieżki (np. EF krótszą s1–s2, AF/BE przez s3) i/lub dodać Fast-Failover dla EF
 -co zmierze:
 	-ping 
 	-stabilność throughput EF względem AF/BE
