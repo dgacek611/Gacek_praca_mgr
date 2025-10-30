@@ -73,11 +73,11 @@ class QoSTreeController(app_manager.RyuApp):
     def _meter_dpid_whitelist(self) -> Set[int]:
         return _parse_dpid_list(_env_flag("QOS_METER_DPIDS", ""))
 
-    def _rates_bursts(self) -> Tuple[int, int, int, int, int, int]:
+    def _rates_bursts(self) -> Tuple[int, int, int, int, int, int]: 
         """Return (ef_rate, af_rate, be_rate, ef_burst, af_burst, be_burst)."""
-        ef_rate = int(_env_flag("QOS_EF_MBIT", "15"))
-        af_rate = int(_env_flag("QOS_AF_MBIT", "5"))
-        be_rate = int(_env_flag("QOS_BE_MBIT", "20"))
+        ef_rate = int(_env_flag("QOS_EF_MBIT", "6"))
+        af_rate = int(_env_flag("QOS_AF_MBIT", "3"))
+        be_rate = int(_env_flag("QOS_BE_MBIT", "1"))
         ef_burst = int(_env_flag("QOS_EF_BURST_MB", "1"))
         af_burst = int(_env_flag("QOS_AF_BURST_MB", "1"))
         be_burst = int(_env_flag("QOS_BE_BURST_MB", "2"))

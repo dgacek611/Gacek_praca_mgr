@@ -12,9 +12,9 @@
 	python3 b_plot_diffserv_htb.py --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-prefix /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
 	
 	C)
-    python3 c_analyze_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251029_173015 --out-dir /media/sf_Gacek_praca_mgr/logs/c_20251029_173015
+    python3 c_analyze_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327
 
-    python3 c_analyze_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251029_173015 --out-prefix /media/sf_Gacek_praca_mgr/logs/c_20251029_173015 0 10 ---ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
+    python3 c_plot_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-prefix /media/sf_Gacek_praca_mgr/logs/c_20251030_200327  --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
 	
 
 1. START VM

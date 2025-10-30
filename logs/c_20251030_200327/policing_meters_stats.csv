@@ -1,0 +1,4 @@
+source_file,meter_id,rate_kbps,burst_kb,drops_pkts,drops_bytes
+s2_meters.txt,1,6000,1000,31870,47486300
+s2_meters.txt,2,3000,1000,15894,23682060
+s2_meters.txt,3,1000,2000,5245,7822334

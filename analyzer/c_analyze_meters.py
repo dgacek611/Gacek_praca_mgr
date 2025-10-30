@@ -4,7 +4,7 @@
 Analyze Scenario C: Policing (OpenFlow meters) — cięcie nadmiaru.
 - Zbiera statystyki iperf3 (EF/AF31/BE) oraz ping.
 - Weryfikuje obecność meterów w flowach oraz BRAK OUTPUT w Table 0.
-- Parsuje "dump-meters" i "dump-meter-stats" z OVS (dla s1/s2/s3).
+- Parsuje "dump-meters" i "meter-stats" z OVS (dla s1/s2/s3).
 - Generuje raport Markdown + CSV zbiorczy (iperf + statystyki meterów).
 Struktura katalogu wejściowego (jak generuje run_traffic.py):
 run_dir/
@@ -107,7 +107,6 @@ def parse_flows_table0(path: str) -> Dict[str, Any]:
     for line in txt.splitlines():
         if "table=" not in line:
             continue
-        # wyodrębnij numer tabeli
         m = re.search(r"table\s*=\s*(\d+)", line)
         if not m:
             continue
@@ -124,17 +123,13 @@ def parse_flows_table0(path: str) -> Dict[str, Any]:
                 out["table0_with_set_queue"] += 1
     return out
 
-# -------------------------- OVS meters parser ---------------------------------
+# -------------------------- OVS meters parser (POPRAWIONY) --------------------
 
 def parse_meters_stats(path: str) -> Dict[str, Any]:
     """
-    Parsuje zrzut łączony "dump-meters" + "dump-meter-stats".
-    Staramy się wyciągnąć dla każdego meter id:
-      - rate/burst (jeśli da się odczytać),
-      - band type (drop),
-      - band_stats: packets/bytes (dr ople)
-    Zwracamy: { 'meters': { mid: {'rate_kbps':..., 'burst_kb':..., 'drops_pkts':..., 'drops_bytes':... }}, 'raw': optional }
-    Parser jest defensywny: obsługuje różne warianty formatowania OVS.
+    Parsuje łączony plik (dump-meters + meter-stats) i zwraca:
+    { 'meters': { mid: {'rate_kbps', 'burst_kb', 'drops_pkts', 'drops_bytes'} } }
+    Uwaga: 'drops_*' pochodzą WYŁĄCZNIE z band DROP (nie z packet_in_count).
     """
     out = {"meters": {}}
     try:
@@ -142,29 +137,66 @@ def parse_meters_stats(path: str) -> Dict[str, Any]:
     except Exception:
         return out
 
-    # Sekcje meter=<id>...
-    # Przykładowe wzorce:
-    # "meter=1 flags: kbps burst bands: type=drop rate=15000 burst_size=1000"
-    # "meter=1 bands:  type=drop rate=15000 burst_size=1000  stats: pkt_count=123 byte_count=456"
-    # "band stats: packet_count:123 byte_count:456"
-    blocks = re.split(r"(?=meter\s*=\s*\d+)", txt, flags=re.IGNORECASE)
+    # 1) Rozbij na bloki po meter=<id> / meter:<id> / meter-id=<id>
+    blocks = re.split(r"(?=meter(?:-id)?\s*[:=]\s*\d+)", txt, flags=re.IGNORECASE)
+
     for block in blocks:
-        m_id = re.search(r"meter\s*=\s*(\d+)", block, re.IGNORECASE)
+        m_id = re.search(r"meter(?:-id)?\s*[:=]\s*(\d+)", block, re.IGNORECASE)
         if not m_id:
             continue
         mid = int(m_id.group(1))
-        rate = re.search(r"rate\s*=\s*(\d+)", block)
-        burst = re.search(r"burst[_\s]*size\s*=?\s*(\d+)", block, re.IGNORECASE)
-        # stats — różne formaty kluczy
-        pkt = re.search(r"(?:pkt_count|packet_count)\s*[:=]\s*(\d+)|bands?:\s*\d+\s*:\s*packet_count\s*[:=]\s*(\d+)", block, re.IGNORECASE)
-        byt = re.search(r"(?:byte_count|bytes)\s*[:=]\s*(\d+)|bands?:\s*\d+\s*:\s*byte_count\s*[:=]\s*(\d+)", block, re.IGNORECASE)
 
-        out["meters"][mid] = {
-            "rate_kbps": int(rate.group(1)) if rate else None,
-            "burst_kb": int(burst.group(1)) if burst else None,
-            "drops_pkts": int(pkt.group(1) or pkt.group(2)) if pkt else None,
-            "drops_bytes": int((byt.group(1) or byt.group(2))) if byt else None,
-        }
+        rec = out["meters"].setdefault(mid, {
+            "rate_kbps": None,
+            "burst_kb": None,
+            "drops_pkts": None,
+            "drops_bytes": None,
+        })
+
+        # 2) Konfiguracja (dump-meters)
+        m_rate  = re.search(r"\brate\s*=\s*(\d+)\b", block)
+        m_burst = re.search(r"\bburst[_\s]*size\s*=?\s*(\d+)\b", block, re.IGNORECASE)
+        if m_rate:
+            rec["rate_kbps"] = int(m_rate.group(1))
+        if m_burst:
+            rec["burst_kb"] = int(m_burst.group(1))  # w OF to kbit; nazwa kolumny zostaje 'kb'
+
+        # 3) Statystyki bandu DROP
+        # Najpierw spróbuj jedną parą (packet_count + byte_count) w tej samej linii po numerze bandu.
+        m_pair = re.search(
+            r"\bbands?\s*:\s*(?:\n\s*)?\d+\s*:\s*.*?\bpacket_count\s*[:=]\s*(\d+)\s+.*?\bbyte_count\s*[:=]\s*(\d+)",
+            block, re.IGNORECASE | re.DOTALL
+        )
+        if m_pair:
+            rec["drops_pkts"] = int(m_pair.group(1))
+            rec["drops_bytes"] = int(m_pair.group(2))
+        else:
+            # Jeśli nie, spróbuj wyłuskać je osobno z sekcji 'bands:' ...
+            m_band_pkt = re.search(
+                r"\bbands?\s*:\s*(?:\n\s*)?\d+\s*:\s*.*?\bpacket_count\s*[:=]\s*(\d+)",
+                block, re.IGNORECASE | re.DOTALL
+            )
+            m_band_byt = re.search(
+                r"\bbands?\s*:\s*(?:\n\s*)?\d+\s*:\s*.*?\bbyte_count\s*[:=]\s*(\d+)",
+                block, re.IGNORECASE | re.DOTALL
+            )
+            # ... albo z wariantu 'band-stats { ... }'
+            if not m_band_pkt:
+                m_band_pkt = re.search(
+                    r"\bband[-\s]*stats\b.*?\bpacket_count\s*[:=]\s*(\d+)",
+                    block, re.IGNORECASE | re.DOTALL
+                )
+            if not m_band_byt:
+                m_band_byt = re.search(
+                    r"\bband[-\s]*stats\b.*?\bbyte_count\s*[:=]\s*(\d+)",
+                    block, re.IGNORECASE | re.DOTALL
+                )
+
+            if m_band_pkt:
+                rec["drops_pkts"] = int(m_band_pkt.group(1))
+            if m_band_byt:
+                rec["drops_bytes"] = int(m_band_byt.group(1))
+
     return out
 
 # -------------------------- Analiza całego runu --------------------------------
@@ -258,10 +290,10 @@ def write_report(analysis: Dict[str, Any], out_md: str, out_csv_ip: str, out_csv
     # Flows sanity
     lines.append("## Kontrole w Table 0 (OVS flows)")
     checks = analysis.get("scenarioC_checks", {})
-    lines.append(f"- Reguły w Table 0 obecne: **{checks.get('table0_present', False)}**")
-    lines.append(f"- InstructionMeter w Table 0: **{checks.get('table0_has_meter', False)}**")
-    lines.append(f"- SetQueue w Table 0 (oznaka trybu kolejkowania, NIE policing): **{checks.get('table0_has_set_queue', False)}**")
-    lines.append(f"- OUTPUT w Table 0 (niepożądane): **{checks.get('table0_has_output', False)}**")
+    lines.append(f"- Reguły w Table 0 obecne: *{checks.get('table0_present', False)}*")
+    lines.append(f"- InstructionMeter w Table 0: *{checks.get('table0_has_meter', False)}*")
+    lines.append(f"- SetQueue w Table 0 (oznaka trybu kolejkowania, NIE policing): *{checks.get('table0_has_set_queue', False)}*")
+    lines.append(f"- OUTPUT w Table 0 (niepożądane): *{checks.get('table0_has_output', False)}*")
     lines.append("Plik | table0_rules | table0_with_meter | table0_with_set_queue | table0_with_output")
     lines.append("---|---:|---:|---:")
     for fname, v in (analysis.get("flows_table0") or {}).items():
@@ -270,7 +302,7 @@ def write_report(analysis: Dict[str, Any], out_md: str, out_csv_ip: str, out_csv
 
     # Meters
     lines.append("## Statystyki meterów (dump-meters + dump-meter-stats)")
-    lines.append(f"- Zrzuty metery obecne: **{checks.get('has_meter_dumps', False)}**")
+    lines.append(f"- Zrzuty metery obecne: *{checks.get('has_meter_dumps', False)}*")
     lines.append("Plik | meter_id | rate_kbps | burst_kb | drops_pkts | drops_bytes")
     lines.append("---|---:|---:|---:|---:|---:")
     meters = analysis.get("meters", {})
@@ -282,7 +314,7 @@ def write_report(analysis: Dict[str, Any], out_md: str, out_csv_ip: str, out_csv
             lines.append(f"{fname} | {mid} | {s.get('rate_kbps','')} | {s.get('burst_kb','')} | {s.get('drops_pkts','')} | {s.get('drops_bytes','')}")
 
     lines.append("")
-    lines.append(f"**Uwaga**: {checks.get('note','')}")
+    lines.append(f"*Uwaga*: {checks.get('note','')}")
     lines.append("")
 
     with open(out_md, "w", encoding="utf-8") as f:

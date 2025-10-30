@@ -18,9 +18,9 @@ from mininet.log import setLogLevel, info
 BOTTLENECK_DEV_DEFAULT = "s2-eth1"
 BOTTLENECK_RATE_DEFAULT = "10mbit"
 
-IPERF_EF_MBIT = 20
-IPERF_AF_MBIT = 20
-IPERF_BE_MBIT = 20
+IPERF_EF_MBIT = 6
+IPERF_AF_MBIT = 6
+IPERF_BE_MBIT = 6
 
 DSCP_EF = 46
 DSCP_AF31 = 26
@@ -320,9 +320,9 @@ def setup_qos_for_scenario(scenario: str, bottleneck_dev: str, bottleneck_rate: 
     elif mode == "htb":
         rate_bits = int(bottleneck_rate.replace("mbit", "")) * 1_000_000
         queues = {
-            0: {"min": 1_000_000,  "max": 1_000_000,  "priority": 0, "burst": 150000},  # BE
-            1: {"min": 4_000_000,  "max": 4_000_000,  "priority": 1, "burst": 200000},  # AF
-            2: {"min": 15_000_000, "max": 15_000_000, "priority": 2, "burst": 250000},  # EF
+            0: {"min": 1_000_000,  "max": 1_000_000,  "priority": 0, "burst": 10000},  # BE
+            1: {"min": 3_000_000,  "max": 3_000_000,  "priority": 1, "burst": 30000},  # AF
+            2: {"min": 6_000_000, "max": 6_000_000, "priority": 2, "burst": 60000},  # EF
         }
         apply_htb(dev, queues=queues, linkspeed_bits=rate_bits)
         info(f"[QoS] B/HTB: 3 kolejki na {dev} (EF=2, AF=1, BE=0)\n")
