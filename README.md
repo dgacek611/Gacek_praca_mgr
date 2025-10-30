@@ -1,6 +1,7 @@
 # Analiza możliwości wykorzystania koncepcji SDN do dynamicznej kontroli QoS w sieciach opartych na MPLS i DiffServ
 
 1. START VM
+
 	source mgr_sdn/bin/activate
 	sudo mount -t vboxsf Gacek_praca_mgr /media/sf_Gacek_praca_mgr
 
