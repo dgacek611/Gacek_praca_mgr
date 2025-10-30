@@ -133,14 +133,14 @@ E) Selekcja ścieżek per klasa (SDN routing) + awaria
 
 	A) Baseline (bez QoS)
 
-	Bottleneck: 10 Mbit/s (TBF na porcie „wąskim”).
+	Bottleneck: 10 Mbit/s (TBF na porcie wyjsciowym S2).
 	Wysyłanie (h1 → h2): EF=6 Mbit/s, AF=6 Mbit/s, BE=6 Mbit/s (suma 18 > 10, celowo).
 	Oczekiwane: wszystkie klasy tracą podobnie; rośnie jitter/loss; EF nie ma przewagi.
 
 	B) DiffServ + kolejki (HTB)
 
 	Bottleneck: 10 Mbit/s (ten sam port).
-	Kolejki HTB na „wąskim” porcie (min/max):
+	Kolejki HTB na porcie wyjsciowym S2 (min/max):
 	EF: 6/6 Mbit/s, AF: 3/3 Mbit/s, BE: 1/1 Mbit/s (priorytet EF>AF>BE).
 	Wysyłanie (to samo co w A): EF=6, AF=6, BE=6 Mbit/s.
 	Oczekiwane: EF trzyma 6 Mbit/s z niskim jitterem; AF ~3 Mbit/s; BE ~1 Mbit/s; dropy głównie w BE/AF; liczniki kolejek to pokażą.
