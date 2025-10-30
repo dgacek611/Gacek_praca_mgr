@@ -3,10 +3,13 @@
 1. START VM
 
 	source mgr_sdn/bin/activate
+	
 	sudo mount -t vboxsf Gacek_praca_mgr /media/sf_Gacek_praca_mgr
 
 2. KONTROLER
+
 	sudo systemctl restart openvswitch-switch
+	
 	sudo mn -c
 
 	A) 
@@ -19,6 +22,7 @@
 	QOS_MODE=meter ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
 
 3. SIEĆ I RUCH
+
 	A)
 	sudo -E python3 /media/sf_Gacek_praca_mgr/traffic/run_traffic.py \
 	  --topo-file /media/sf_Gacek_praca_mgr/mininet_topo/project_topo_3_switches.py \
@@ -56,6 +60,7 @@
 4. PLAN:
 
 A) Baseline (BEZ QoS)
+
     -cel: pokazać, że samo ustawienie DSCP w pakietach bez kolejek/meters nie daje priorytetu. Wszystkie klasy konkurują Best-Effort.
     -co zmierze:
         -Throughput per strumień/Jitter/packet loss + RTT/jitter RTT (ping/fping) — żeby mieć punkt odniesienia.
@@ -64,6 +69,7 @@ A) Baseline (BEZ QoS)
         -widać wzrost jitter/loss dla wszystkich przy nasyceniu
 
 B) DiffServ + kolejki (HTB) — Shaping / priorytety na wąskim gardle
+
     -cel: wymusić priorytety między klasami. EF powinien utrzymywać niski jitter/stratę przy przeciążeniu łącza, AF „średnio”, BE „reszta”
     -co zmierze: throughput/jitter/loss per klasa + RTT oraz statystyki kolejek (zajętość/dropy) na porcie „wąskim”
     -co weryfikuje:
@@ -72,6 +78,7 @@ B) DiffServ + kolejki (HTB) — Shaping / priorytety na wąskim gardle
         -Poziom aplikacyjny - w iperf3 EF utrzymuje zadany bitrate z niskim jitterem; AF dostaje przydział wg HTB, BE traci najwięcej przy przepełnieniu.
 
 C) Policing (OpenFlow meters) — cięcie nadmiaru, nie zmiana trasy
+
     -cel: pokazać różnicę między shapingiem (kolejki buforują/gładzą) a policingiem (twardy limit: nadmiar drop/remark).
     -co zmierze: throughput/packet loss +RTT pomocniczo
     -co weryfikuje:
@@ -80,6 +87,7 @@ C) Policing (OpenFlow meters) — cięcie nadmiaru, nie zmiana trasy
         -kolejki mogą raportować mniej dropów (bo nadmiar został odcięty wcześniej przez meter).
 
 D) DiffServ + MPLS (push/pop + EXP) i tryby tunelowania
+
     -cel:zademonstrować mapowanie DSCP↔EXP (mpls_tc) i trzy tryby: Uniform, Short-Pipe, Pipe. Warstwa MPLS nie musi „polepszyć” samych metryk jakości — ona przenosi klasę w rdzeniu i pozwala na polityki w core.
     -co zmierze:
         -oprawność oznakowania
@@ -89,6 +97,7 @@ D) DiffServ + MPLS (push/pop + EXP) i tryby tunelowania
         -tryby unform/short-pipe/pipe
 
 E) Selekcja ścieżek per klasa (SDN routing) + awaria
+
     -cel:rozdzielić klasy na różne ścieżki (np. EF krótszą s1–s2, AF/BE przez s3) i/lub dodać Fast-Failover dla EF
     -co zmierze:
         -ping 
@@ -100,22 +109,24 @@ E) Selekcja ścieżek per klasa (SDN routing) + awaria
         -awaria: po down’ie linku (np. link s1 s2 down w Mininecie) EF przełącza się < 1 s (z group FF) lub po przeinstalowaniu flowów przez Ryu.
 
 5. ANALIZA:
-	A) 
-	python3 analyze_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809
 
-	python3 plot_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-prefix /media/sf_Gacek_praca_mgr/logs/a_20251030_192809 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
+	A) 
+	
+		python3 analyze_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809
+		python3 plot_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-prefix /media/sf_Gacek_praca_mgr/logs/a_20251030_192809 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
 
 	B)
-	python3 b_analyze_diffserv_htb.py   --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419
-
-	python3 b_plot_diffserv_htb.py --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-prefix /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
+	
+		python3 b_analyze_diffserv_htb.py   --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419
+		python3 b_plot_diffserv_htb.py --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-prefix /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
 	
 	C)
-    python3 c_analyze_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327
-
-    python3 c_plot_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-prefix /media/sf_Gacek_praca_mgr/logs/c_20251030_200327  --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
+	
+	    python3 c_analyze_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327
+	    python3 c_plot_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-prefix /media/sf_Gacek_praca_mgr/logs/c_20251030_200327  --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
 
 6. WYNIKI:
+
 	A) Baseline (bez QoS)
 
 		Bottleneck: 10 Mbit/s (TBF na porcie „wąskim”).
