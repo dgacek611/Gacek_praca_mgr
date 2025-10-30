@@ -1,0 +1,9 @@
+source_file,iface_or_class,metric,value
+s2-eth1_qos.txt,queue1,packets,15181
+s2-eth1_qos.txt,queue1,bytes,22618246
+s2-eth1_qos.txt,queue1,dropped,
+s2-eth1_qos.txt,queue1,errors,0
+s2-eth1_qos.txt,queue2,packets,30254
+s2-eth1_qos.txt,queue2,bytes,45077016
+s2-eth1_qos.txt,queue2,dropped,
+s2-eth1_qos.txt,queue2,errors,0

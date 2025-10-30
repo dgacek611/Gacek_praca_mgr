@@ -1,0 +1,10 @@
+scenario=b
+duration_s=60
+controller=127.0.0.1:6653
+h1_ip=10.0.0.1
+h2_ip=10.0.0.2
+bottleneck_dev=s2-eth1
+bottleneck_rate=10mbit
+qos_mode=htb
+dump_ports=s2-eth1
+pcap_ifs=

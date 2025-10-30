@@ -71,9 +71,53 @@ def _load_metrics_simple(run_dir):
     # reindex to ORDER
     return {k: vals.get(k, {"throughput": float("nan"), "jitter": float("nan"), "loss": float("nan")}) for k in ORDER}
 
+def _parse_tc_drops(run_dir):
+    switch = os.path.join(run_dir, "switch")
+    drops = {}
+    if not os.path.isdir(switch):
+        return drops
+    for fname in os.listdir(switch):
+        if not fname.endswith("_tc.txt"):
+            continue
+        try:
+            txt = open(os.path.join(switch, fname), "r", encoding="utf-8", errors="ignore").read()
+            dsum = 0
+            import re as _re
+            for x in _re.findall(r"dropped\s+(\d+)", txt, _re.IGNORECASE):
+                try: dsum += int(x)
+                except: pass
+            drops[fname] = dsum
+        except Exception:
+            pass
+    return drops
+
+def _parse_ovs_qos_drops(run_dir):
+    switch = os.path.join(run_dir, "switch")
+    qtot = {}
+    if not os.path.isdir(switch):
+        return qtot
+    for fname in os.listdir(switch):
+        if not fname.endswith("_qos.txt"):
+            continue
+        try:
+            txt = open(os.path.join(switch, fname), "r", encoding="utf-8", errors="ignore").read()
+            import re as _re
+            for qid in ("0","1","2","3"):
+                m = _re.search(rf"queue\s+{qid}\s*:(.*?)(?:\n\s*\n|\Z)", txt, _re.IGNORECASE | _re.DOTALL)
+                if not m:
+                    continue
+                blk = m.group(1)
+                md = _re.search(r"dropped\s*:\s*(\d+)", blk, _re.IGNORECASE)
+                d = int(md.group(1)) if md else 0
+                key = f"q{qid}"
+                qtot[key] = qtot.get(key, 0) + d
+        except Exception:
+            pass
+    return qtot
+
 def main():
-    ap = argparse.ArgumentParser(description="Plot Scenario A (Baseline) EF/AF/BE stats (RX)")
-    ap.add_argument("--run-dir", required=True, help="Katalog z wynikami scenariusza A")
+    ap = argparse.ArgumentParser(description="Plot Scenario B (DiffServ + HTB) charts")
+    ap.add_argument("--run-dir", required=True, help="Katalog z wynikami scenariusza B")
     ap.add_argument("--out-prefix", default="/mnt/data/", help="Prefiks ścieżki wyjściowej")
     # Jednolite skale
     ap.add_argument("--ylim-throughput", nargs=2, type=float, default=[0.0, 10.0], metavar=("YMIN","YMAX"))
@@ -85,19 +129,34 @@ def main():
     labels = list(ORDER)
 
     _bar_plot(labels, [vals[k]["throughput"] for k in labels],
-              "Throughput (RX) — Baseline (Scenario A)", "Mb/s",
-              os.path.join(args.out_prefix, "a_throughput_rx.png"),
+              "Throughput (RX) — DiffServ + HTB (Scenario B)", "Mb/s",
+              os.path.join(args.out_prefix, "b_throughput_rx.png"),
               ylim=tuple(args.ylim_throughput))
     _bar_plot(labels, [vals[k]["loss"] for k in labels],
-              "Packet loss — Baseline (Scenario A)", "%",
-              os.path.join(args.out_prefix, "a_loss_rx.png"),
+              "Packet loss — DiffServ + HTB (Scenario B)", "%",
+              os.path.join(args.out_prefix, "b_loss_rx.png"),
               ylim=tuple(args.ylim_loss))
     _bar_plot(labels, [vals[k]["jitter"] for k in labels],
-              "Jitter — Baseline (Scenario A)", "ms",
-              os.path.join(args.out_prefix, "a_jitter_rx.png"),
+              "Jitter — DiffServ + HTB (Scenario B)", "ms",
+              os.path.join(args.out_prefix, "b_jitter_rx.png"),
               ylim=tuple(args.ylim_jitter))
 
-    print("OK: zapisano A-wykresy do", args.out_prefix)
+    # opcjonalne zrzuty HTB/OVS (skala nie jest wymuszana – to dodatkowe wykresy)
+    tc = _parse_tc_drops(args.run_dir)
+    if tc:
+        tclab = list(tc.keys())
+        tcval = [tc[k] for k in tclab]
+        _bar_plot(tclab, tcval, "HTB drops (tc -s)", "packets",
+                  os.path.join(args.out_prefix, "b_htb_drops.png"))
+
+    qos = _parse_ovs_qos_drops(args.run_dir)
+    if qos:
+        qlab = sorted(qos.keys())
+        qval = [qos[k] for k in qlab]
+        _bar_plot(qlab, qval, "OVS QoS dropped per queue", "packets",
+                  os.path.join(args.out_prefix, "b_ovs_qos_dropped.png"))
+
+    print("OK: zapisano B-wykresy do", args.out_prefix)
 
 if __name__ == "__main__":
     main()

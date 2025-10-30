@@ -71,9 +71,32 @@ def _load_metrics_simple(run_dir):
     # reindex to ORDER
     return {k: vals.get(k, {"throughput": float("nan"), "jitter": float("nan"), "loss": float("nan")}) for k in ORDER}
 
+def _parse_meters_drops(run_dir):
+    switch = os.path.join(run_dir, "switch")
+    drops = {}
+    if not os.path.isdir(switch):
+        return drops
+    for fname in os.listdir(switch):
+        if not fname.endswith("_meters.txt"):
+            continue
+        try:
+            txt = open(os.path.join(switch, fname), "r", encoding="utf-8", errors="ignore").read()
+            import re as _re
+            for block in _re.split(r"(?=meter\s*=\s*\d+)", txt, flags=_re.IGNORECASE):
+                m_id = _re.search(r"meter\s*=\s*(\d+)", block, _re.IGNORECASE)
+                if not m_id:
+                    continue
+                mid = int(m_id.group(1))
+                m_pkt = _re.search(r"(?:pkt_count|packet_count)\s*[:=]\s*(\d+)", block, _re.IGNORECASE)
+                d = int(m_pkt.group(1)) if m_pkt else 0
+                drops[mid] = drops.get(mid, 0) + d
+        except Exception:
+            pass
+    return drops
+
 def main():
-    ap = argparse.ArgumentParser(description="Plot Scenario A (Baseline) EF/AF/BE stats (RX)")
-    ap.add_argument("--run-dir", required=True, help="Katalog z wynikami scenariusza A")
+    ap = argparse.ArgumentParser(description="Plot Scenario C (Policing / meters) charts")
+    ap.add_argument("--run-dir", required=True, help="Katalog z wynikami scenariusza C")
     ap.add_argument("--out-prefix", default="/mnt/data/", help="Prefiks ścieżki wyjściowej")
     # Jednolite skale
     ap.add_argument("--ylim-throughput", nargs=2, type=float, default=[0.0, 10.0], metavar=("YMIN","YMAX"))
@@ -85,19 +108,26 @@ def main():
     labels = list(ORDER)
 
     _bar_plot(labels, [vals[k]["throughput"] for k in labels],
-              "Throughput (RX) — Baseline (Scenario A)", "Mb/s",
-              os.path.join(args.out_prefix, "a_throughput_rx.png"),
+              "Throughput (RX) — Policing (Scenario C)", "Mb/s",
+              os.path.join(args.out_prefix, "c_throughput_rx.png"),
               ylim=tuple(args.ylim_throughput))
     _bar_plot(labels, [vals[k]["loss"] for k in labels],
-              "Packet loss — Baseline (Scenario A)", "%",
-              os.path.join(args.out_prefix, "a_loss_rx.png"),
+              "Packet loss — Policing (Scenario C)", "%",
+              os.path.join(args.out_prefix, "c_loss_rx.png"),
               ylim=tuple(args.ylim_loss))
     _bar_plot(labels, [vals[k]["jitter"] for k in labels],
-              "Jitter — Baseline (Scenario A)", "ms",
-              os.path.join(args.out_prefix, "a_jitter_rx.png"),
+              "Jitter — Policing (Scenario C)", "ms",
+              os.path.join(args.out_prefix, "c_jitter_rx.png"),
               ylim=tuple(args.ylim_jitter))
 
-    print("OK: zapisano A-wykresy do", args.out_prefix)
+    md = _parse_meters_drops(args.run_dir)
+    if md:
+        mlab = [f"m{m}" for m in sorted(md.keys())]
+        mval = [md[m] for m in sorted(md.keys())]
+        _bar_plot(mlab, mval, "Meter drops per meter_id", "packets",
+                  os.path.join(args.out_prefix, "c_meter_drops.png"))
+
+    print("OK: zapisano C-wykresy do", args.out_prefix)
 
 if __name__ == "__main__":
     main()
