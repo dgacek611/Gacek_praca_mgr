@@ -16,7 +16,10 @@
 2. KONTROLER
 	sudo systemctl restart openvswitch-switch
 	sudo mn -c
-	
+
+	A) 
+	QOS_MODE=none ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
+
 	B)
 	QOS_MODE=htb ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
 	
