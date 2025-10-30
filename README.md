@@ -1,22 +1,5 @@
 # Analiza możliwości wykorzystania koncepcji SDN do dynamicznej kontroli QoS w sieciach opartych na MPLS i DiffServ
 
-0. ANALIZA:
-	A) 
-	python3 analyze_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809
-
-	python3 plot_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-prefix /media/sf_Gacek_praca_mgr/logs/a_20251030_192809 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
-
-	B)
-	python3 b_analyze_diffserv_htb.py   --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419
-
-	python3 b_plot_diffserv_htb.py --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-prefix /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
-	
-	C)
-    python3 c_analyze_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327
-
-    python3 c_plot_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-prefix /media/sf_Gacek_praca_mgr/logs/c_20251030_200327  --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
-	
-
 1. START VM
 	source mgr_sdn/bin/activate
 	sudo mount -t vboxsf Gacek_praca_mgr /media/sf_Gacek_praca_mgr
@@ -114,3 +97,44 @@ E) Selekcja ścieżek per klasa (SDN routing) + awaria
         -dump-flows - różne OUTPUT:port dla różnych ip_dscp na tych samych switchach.
         -rtt -  EF ma niższe RTT od AF/BE.
         -awaria: po down’ie linku (np. link s1 s2 down w Mininecie) EF przełącza się < 1 s (z group FF) lub po przeinstalowaniu flowów przez Ryu.
+
+5. ANALIZA:
+	A) 
+	python3 analyze_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809
+
+	python3 plot_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-prefix /media/sf_Gacek_praca_mgr/logs/a_20251030_192809 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
+
+	B)
+	python3 b_analyze_diffserv_htb.py   --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419
+
+	python3 b_plot_diffserv_htb.py --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-prefix /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
+	
+	C)
+    python3 c_analyze_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327
+
+    python3 c_plot_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-prefix /media/sf_Gacek_praca_mgr/logs/c_20251030_200327  --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
+
+6. WYNIKI:
+	A) Baseline (bez QoS)
+
+		Bottleneck: 10 Mbit/s (TBF na porcie „wąskim”).
+		Wysyłanie (h1 → h2): EF=6 Mbit/s, AF=6 Mbit/s, BE=6 Mbit/s (suma 18 > 10, celowo).
+		Oczekiwane: wszystkie klasy tracą podobnie; rośnie jitter/loss; EF nie ma przewagi.
+
+	B) DiffServ + kolejki (HTB)
+
+		Bottleneck: 10 Mbit/s (ten sam port).
+		Kolejki HTB na „wąskim” porcie (min/max):
+		EF: 6/6 Mbit/s, AF: 3/3 Mbit/s, BE: 1/1 Mbit/s (priorytet EF>AF>BE).
+		Wysyłanie (to samo co w A): EF=6, AF=6, BE=6 Mbit/s.
+		Oczekiwane: EF trzyma 6 Mbit/s z niskim jitterem; AF ~3 Mbit/s; BE ~1 Mbit/s; dropy głównie w BE/AF; liczniki kolejek to pokażą.
+
+	C) Policing (OpenFlow meters)
+	
+		(Bez kolejek kształtujących – tylko bottleneck 10 Mbit/s dla spójnych warunków).
+		Metery (ENV w kontrolerze):
+			QOS_MODE=meter
+			QOS_EF_MBIT=6, QOS_AF_MBIT=3, QOS_BE_MBIT=1
+			(opcjonalnie bursty: QOS_EF_BURST_MB=1, QOS_AF_BURST_MB=1, QOS_BE_BURST_MB=2)
+		Wysyłanie EF=12 Mbit/s, AF=6 Mbit/s, BE=2 Mbit/s.
+		Oczekiwane: throughput każdej klasy przycięty do 6/3/1 Mbit/s, wzrost loss ponad limitem; brak zmian trasy (dump-flows bez dodatkowych OUTPUT).
