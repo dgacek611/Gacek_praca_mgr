@@ -72,7 +72,7 @@ A) Baseline (BEZ QoS)
 	-przy sumarycznym obciążeniu zbliżonym/przekraczającym bottleneck wszystkie klasy tracą podobnie, EF nie „wygrywa” (bo nie ma jeszcze kolejek ani reguł).
 	-widać wzrost jitter/loss dla wszystkich przy nasyceniu
 
-B) DiffServ + kolejki (HTB) — Shaping / priorytety na wąskim gardle
+B1) DiffServ + kolejki (HTB) — Shaping / priorytety na wąskim gardle
 
 -cel: wymusić priorytety między klasami. EF powinien utrzymywać niski jitter/stratę przy przeciążeniu łącza, AF „średnio”, BE „reszta”
 -co zmierze: throughput/jitter/loss per klasa + RTT oraz statystyki kolejek (zajętość/dropy) na porcie „wąskim”
@@ -80,6 +80,8 @@ B) DiffServ + kolejki (HTB) — Shaping / priorytety na wąskim gardle
 	-Poziom pakietów: widze reguły z ip_dscp i set_queue - to potwierdza klasyfikację
 	-Poziom kolejek - liczniki bajtów/pkt i dropów w q1/q2/q0; EF powinien mieć najmniej dropów i stabilny transfer/jitter
 	-Poziom aplikacyjny - w iperf3 EF utrzymuje zadany bitrate z niskim jitterem; AF dostaje przydział wg HTB, BE traci najwięcej przy przepełnieniu.
+
+B2) Shaping dynamiczny
 
 C) Policing (OpenFlow meters) — cięcie nadmiaru, nie zmiana trasy
 
