@@ -81,8 +81,6 @@ B1) DiffServ + kolejki (HTB) — Shaping / priorytety na wąskim gardle
 	-Poziom kolejek - liczniki bajtów/pkt i dropów w q1/q2/q0; EF powinien mieć najmniej dropów i stabilny transfer/jitter
 	-Poziom aplikacyjny - w iperf3 EF utrzymuje zadany bitrate z niskim jitterem; AF dostaje przydział wg HTB, BE traci najwięcej przy przepełnieniu.
 
-B2) Shaping dynamiczny
-
 C) Policing (OpenFlow meters) — cięcie nadmiaru, nie zmiana trasy
 
 -cel: pokazać różnicę między shapingiem (kolejki buforują/gładzą) a policingiem (twardy limit: nadmiar drop/remark).
@@ -104,7 +102,7 @@ D) DiffServ + MPLS (push/pop + EXP) i tryby tunelowania
 
 E) Selekcja ścieżek per klasa (SDN routing) + awaria
 
--cel: rozdzielić klasy na różne ścieżki (np. EF krótszą s1–s2, AF/BE przez s3) i/lub dodać Fast-Failover dla EF
+-cel: rozdzielić klasy na różne ścieżki (np. EF/AF krótszą s1–s2, BE przez s3) i/lub dodać Fast-Failover dla EF
 -co zmierze:
 	-ping 
 	-stabilność throughput EF względem AF/BE
