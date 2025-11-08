@@ -2,8 +2,9 @@
 
 1. START VM
 
-		source mgr_sdn/bin/activate
-		sudo mount -t vboxsf Gacek_praca_mgr /media/sf_Gacek_praca_mgr
+		sudo modprobe -a openvswitch sch_htb sch_netem sch_hfsc sch_tbf sch_red
+		sudo /etc/init.d/openvswitch-switch start
+		pyenv activate sdn
 
 2. KONTROLER
 
@@ -14,13 +15,19 @@
 	
 		QOS_MODE=none ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
 
+		QOS_MODE=none ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /home/dorota/Gacek_praca_mgr/ryu_app/ryu_qos.py
+
 	B)
 	
 		QOS_MODE=htb ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
+
+		QOS_MODE=htb ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /home/dorota/Gacek_praca_mgr/ryu_app/ryu_qos.py
 	
 	C)
 	
 		QOS_MODE=meter ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /media/sf_Gacek_praca_mgr/ryu_app/qos_ryu.py
+
+		QOS_MODE=meter ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /home/dorota/Gacek_praca_mgr/ryu_app/ryu_qos.py
 
 3. SIEĆ I RUCH
 
@@ -34,6 +41,14 @@
 		  --log-dir /media/sf_Gacek_praca_mgr/logs \
 		  --dump-ports s2-eth1 \
 		  --pcap-ifs ""
+
+		sudo -E python3 /home/dorota/Gacek_praca_mgr/traffic/run_traffic_polska.py \
+			--topo-file /home/dorota/Gacek_praca_mgr/mininet_topo/polska_topo.py \
+			--controller-ip 127.0.0.1 --controller-port 6653 \
+			--duration 30 \
+			--scenario a \
+			--bottleneck-dev auto-sp1 \
+			--log-dir /home/dorota/Gacek_praca_mgr/logs/scenario_A
   
 	B)
 	
@@ -47,7 +62,16 @@
 		  --bottleneck-rate 20mbit \
 		  --dump-ports s2-eth1 \
 		  --pcap-ifs ""
-	  
+
+		sudo -E python3 /home/dorota/Gacek_praca_mgr/traffic/run_traffic_polska.py \
+			--topo-file /home/dorota/Gacek_praca_mgr/mininet_topo/polska_topo.py \
+			--controller-ip 127.0.0.1 --controller-port 6653 \
+			--duration 30 \
+			--scenario b \
+			--bottleneck-dev sp1-eth2 \
+			--verify-htb \
+			--log-dir /home/dorota/Gacek_praca_mgr/logs/scenario_B
+
 	C)
 	
 		sudo -E python3 /media/sf_Gacek_praca_mgr/traffic/run_traffic.py \
@@ -60,6 +84,15 @@
 		  --bottleneck-rate 20mbit \
 		  --dump-ports s2-eth1 \
 		  --pcap-ifs ""
+
+		sudo -E python3 /home/dorota/Gacek_praca_mgr/traffic/run_traffic_polska.py \
+			--topo-file /home/dorota/Gacek_praca_mgr/mininet_topo/polska_topo.py \
+			--controller-ip 127.0.0.1 --controller-port 6653 \
+			--duration 30 \
+			--scenario c \
+			--bottleneck-dev sp1-eth2 \
+			--log-dir /home/dorota/Gacek_praca_mgr/logs/scenario_C
+
 
 4. PLAN:
 
