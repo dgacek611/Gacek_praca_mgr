@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -8,15 +7,10 @@ Analyze Scenario B: DiffServ + HTB (shaping/priorities on bottleneck).
 - Parsuje statystyki kolejek HTB z dumpu `tc -s qdisc/class show dev IFACE`.
 - Opcjonalnie parsuje statystyki OVS QoS/queue z `ovs-appctl qos/show IFACE`.
 - Generuje raport Markdown oraz CSV-y pomocnicze.
-Struktura katalogu wejściowego zakładana jest podobna jak w scenariuszu A:
-run_dir/
-  clients/
-    ef.json, af31.json, be.json, ping.txt
-  switch/
-    <iface>_flows.txt             # "ovs-ofctl dump-flows" lub "ovs-appctl ofproto/trace/show"
-    <iface>_tc.txt                # "tc -s qdisc show dev IFACE" + "tc -s class show dev IFACE" (może być w jednym pliku)
-    <iface>_qos.txt               # "ovs-appctl qos/show IFACE" (opcjonalne)
-Jeżeli nazwy/formaty różnią się – skrypt spróbuje zachować się możliwie odpornie.
+
+Tryby:
+- pojedynczy run:  --run-dir /ścieżka/do/run_B_...
+- wiele runów:     --runs-root /ścieżka/do/B_runs/   (wszystkie podkatalogi)
 """
 import os, re, csv, json, argparse
 from typing import Dict, Any, List, Tuple
@@ -141,7 +135,6 @@ def parse_flows_for_qos(path: str) -> Dict[str, Any]:
     counters["ip_dscp_ef"] += ef_tos
     counters["ip_dscp_af31"] += af_tos
     counters["ip_dscp_any"] += any_tos
-
 
     return counters
 
@@ -392,7 +385,7 @@ def write_report(analysis: Dict[str, Any], out_md: str, out_csv_ip: str, out_csv
     with open(out_md, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
-    # CSV 1: iperf summary
+    # CSV 1: iperf summary (per run)
     with open(out_csv_ip, "w", newline="", encoding="utf-8") as csvfile:
         w = csv.writer(csvfile)
         w.writerow(["class","throughput_rx_Mbps","jitter_ms","loss_pct"])
@@ -415,25 +408,82 @@ def write_report(analysis: Dict[str, Any], out_md: str, out_csv_ip: str, out_csv
                 for k in ("packets","bytes","dropped","errors"):
                     w.writerow([fname, f"queue{qid}", k, s.get(k,"")])
 
+# -------------------------- main: pojedynczy run / wiele runów ----------------
+
 def main():
-    ap = argparse.ArgumentParser(description="Analyze Scenario B: DiffServ + HTB run directory.")
-    ap.add_argument("--run-dir", required=True, help="Directory created by run_traffic.py (scenario B)")
-    ap.add_argument("--out-dir", default=None, help="Gdzie zapisać raporty; domyślnie do --run-dir")
+    ap = argparse.ArgumentParser(description="Analyze Scenario B: DiffServ + HTB results.")
+    ap.add_argument("--run-dir", help="Pojedynczy katalog run (jak z run_traffic.py dla scenariusza B)")
+    ap.add_argument("--runs-root", help="Katalog zawierający wiele katalogów run (każdy osobno analizowany)")
+    ap.add_argument("--out-dir", default=None, help="Gdzie zapisać raporty; domyślnie: do danego katalogu run / runs-root")
     args = ap.parse_args()
 
-    analysis = analyze_run(args.run_dir)
+    if not args.run_dir and not args.runs_root:
+        ap.error("Podaj albo --run-dir (pojedynczy run), albo --runs-root (wiele runów).")
 
-    out_dir = args.out_dir or args.run_dir
-    os.makedirs(out_dir, exist_ok=True)
-    out_md  = os.path.join(out_dir, "diffserv_htb_report.md")
-    out_csv_ip = os.path.join(out_dir, "diffserv_summary_rx.csv")
-    out_csv_q  = os.path.join(out_dir, "diffserv_queues_summary.csv")
-    write_report(analysis, out_md, out_csv_ip, out_csv_q)
+    # Tryb: wiele runów w jednym katalogu
+    if args.runs_root:
+        root = args.runs_root
+        if not os.path.isdir(root):
+            raise SystemExit(f"--runs-root '{root}' nie jest katalogiem")
 
-    print("OK. Wygenerowano:")
-    print(" -", out_md)
-    print(" -", out_csv_ip)
-    print(" -", out_csv_q)
+        all_rows = []
+        # każdy podkatalog traktujemy jako osobny run
+        for name in sorted(os.listdir(root)):
+            run_path = os.path.join(root, name)
+            if not os.path.isdir(run_path):
+                continue
+
+            print(f"[i] Analiza runu: {run_path}")
+            analysis = analyze_run(run_path)
+
+            # raporty per-run – domyślnie do samego runu
+            out_dir_run = args.out_dir or run_path
+            os.makedirs(out_dir_run, exist_ok=True)
+            out_md = os.path.join(out_dir_run, "diffserv_htb_report.md")
+            out_csv_ip = os.path.join(out_dir_run, "diffserv_summary_rx.csv")
+            out_csv_q  = os.path.join(out_dir_run, "diffserv_queues_summary.csv")
+            write_report(analysis, out_md, out_csv_ip, out_csv_q)
+
+            # zbiorczy wiersz do all_runs_summary_rx.csv
+            iperf = analysis.get("iperf", {})
+            for cls in ("EF", "AF31", "BE"):
+                s = iperf.get(cls, {})
+                all_rows.append({
+                    "run": name,
+                    "class": cls,
+                    "throughput_rx_Mbps": s.get("throughput_rx_Mbps", ""),
+                    "jitter_ms": s.get("jitter_ms", ""),
+                    "loss_pct": s.get("loss_pct", ""),
+                })
+
+        # zapis zbiorczego CSV
+        combo_out_dir = args.out_dir or args.runs_root
+        os.makedirs(combo_out_dir, exist_ok=True)
+        combo_csv = os.path.join(combo_out_dir, "all_runs_summary_rx.csv")
+        with open(combo_csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=["run","class","throughput_rx_Mbps","jitter_ms","loss_pct"])
+            w.writeheader()
+            for row in all_rows:
+                w.writerow(row)
+
+        print(f"\nOK. Wygenerowano zbiorczy plik: {combo_csv}")
+
+    # Tryb: pojedynczy run (tak jak wcześniej)
+    if args.run_dir and not args.runs_root:
+        run_dir = args.run_dir
+        analysis = analyze_run(run_dir)
+
+        out_dir = args.out_dir or run_dir
+        os.makedirs(out_dir, exist_ok=True)
+        out_md = os.path.join(out_dir, "diffserv_htb_report.md")
+        out_csv_ip = os.path.join(out_dir, "diffserv_summary_rx.csv")
+        out_csv_q  = os.path.join(out_dir, "diffserv_queues_summary.csv")
+        write_report(analysis, out_md, out_csv_ip, out_csv_q)
+
+        print("OK. Wygenerowano:")
+        print(" -", out_md)
+        print(" -", out_csv_ip)
+        print(" -", out_csv_q)
 
 if __name__ == "__main__":
     main()

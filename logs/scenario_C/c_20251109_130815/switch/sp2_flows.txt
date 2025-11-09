@@ -1,0 +1,9 @@
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=38.126s, table=0, n_packets=19, n_bytes=1140, priority=65535,dl_dst=01:80:c2:00:00:0e,dl_type=0x88cc actions=CONTROLLER:65535
+ cookie=0x0, duration=38.150s, table=0, n_packets=0, n_bytes=0, priority=30000,dl_type=0x88cc actions=drop
+ cookie=0x0, duration=38.150s, table=0, n_packets=16, n_bytes=1272, priority=10000,ipv6 actions=drop
+ cookie=0x0, duration=38.150s, table=0, n_packets=0, n_bytes=0, priority=0 actions=CONTROLLER:65535
+ cookie=0x0, duration=38.150s, table=0, n_packets=201606, n_bytes=299400656, priority=1 actions=goto_table:1
+ cookie=0x0, duration=34.558s, table=1, n_packets=201248, n_bytes=299356679, idle_timeout=20, priority=100,dl_dst=2a:d8:a8:3d:62:cb actions=write_actions(output:1)
+ cookie=0x0, duration=34.529s, table=1, n_packets=355, n_bytes=43739, idle_timeout=20, priority=100,dl_dst=6a:e3:5b:bf:0d:63 actions=write_actions(output:2)
+ cookie=0x0, duration=38.150s, table=1, n_packets=3, n_bytes=238, priority=0 actions=CONTROLLER:65535

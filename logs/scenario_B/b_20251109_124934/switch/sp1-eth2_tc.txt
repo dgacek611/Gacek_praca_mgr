@@ -1,0 +1,3 @@
+qdisc htb 1: root refcnt 9 r2q 10 default 0x1 direct_packets_stat 0 direct_qlen 1000
+ Sent 300132542 bytes 201785 pkt (dropped 0, overlimits 396330 requeues 0) 
+ backlog 0b 0p requeues 0

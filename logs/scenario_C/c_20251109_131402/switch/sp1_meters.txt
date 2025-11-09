@@ -1,0 +1,21 @@
+=== dump-meters ===
+OFPST_METER_CONFIG reply (OF1.3) (xid=0x2):
+meter=1 kbps burst bands=
+type=drop rate=40000 burst_size=1024
+
+meter=2 kbps burst bands=
+type=drop rate=30000 burst_size=1024
+
+meter=3 kbps burst bands=
+type=drop rate=10000 burst_size=2048
+
+=== meter-stats ===
+OFPST_METER reply (OF1.3) (xid=0x2):
+meter:1 flow_count:1 packet_in_count:129487 byte_in_count:192934186 duration:38.126s bands:
+0: packet_count:28792 byte_count:42900080
+
+meter:2 flow_count:1 packet_in_count:129487 byte_in_count:192934186 duration:38.126s bands:
+0: packet_count:53924 byte_count:80346760
+
+meter:3 flow_count:1 packet_in_count:130199 byte_in_count:193012212 duration:38.126s bands:
+0: packet_count:104201 byte_count:155237218

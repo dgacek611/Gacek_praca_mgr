@@ -1,0 +1,17 @@
+source_file,iface_or_class,metric,value
+htb_qos.txt,queue1,packets,0
+htb_qos.txt,queue1,bytes,0
+htb_qos.txt,queue1,dropped,
+htb_qos.txt,queue1,errors,0
+htb_qos.txt,queue2,packets,0
+htb_qos.txt,queue2,bytes,0
+htb_qos.txt,queue2,dropped,
+htb_qos.txt,queue2,errors,0
+sp1-eth2_qos.txt,queue1,packets,75542
+sp1-eth2_qos.txt,queue1,bytes,112556136
+sp1-eth2_qos.txt,queue1,dropped,
+sp1-eth2_qos.txt,queue1,errors,0
+sp1-eth2_qos.txt,queue2,packets,100627
+sp1-eth2_qos.txt,queue2,bytes,149932786
+sp1-eth2_qos.txt,queue2,dropped,
+sp1-eth2_qos.txt,queue2,errors,0

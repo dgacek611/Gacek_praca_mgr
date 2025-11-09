@@ -1,0 +1,25 @@
+QoS: sp1-eth2 linux-htb
+max-rate: 10000000000
+
+Default:
+  burst: 250000
+  priority: 2
+  min-rate: 10000000
+  tx_packets: 25590
+  tx_bytes: 37603776
+  tx_errors: 0
+
+Queue 1:
+  burst: 250000
+  priority: 1
+  min-rate: 30000000
+  tx_packets: 75451
+  tx_bytes: 112420546
+  tx_errors: 0
+
+Queue 2:
+  burst: 200000
+  min-rate: 40000000
+  tx_packets: 100519
+  tx_bytes: 149771866
+  tx_errors: 0

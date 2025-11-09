@@ -1,0 +1,4 @@
+source_file,meter_id,rate_kbps,burst_kb,drops_pkts,drops_bytes
+sp1_meters.txt,1,40000,1024,28876,43025240
+sp1_meters.txt,2,30000,1024,53942,80373580
+sp1_meters.txt,3,10000,2048,104194,155239316

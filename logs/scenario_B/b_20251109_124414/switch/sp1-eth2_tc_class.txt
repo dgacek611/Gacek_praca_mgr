@@ -1,0 +1,24 @@
+class htb 1:fffe root rate 10Gbit ceil 10Gbit burst 1250b cburst 1250b 
+ Sent 300198003 bytes 201827 pkt (dropped 0, overlimits 195140 requeues 0) 
+ backlog 0b 0p requeues 0
+ lended: 0 borrowed: 0 giants: 0
+ tokens: 17 ctokens: 17
+
+class htb 1:1 parent 1:fffe prio 2 rate 10Mbit ceil 10Mbit burst 31250b cburst 31250b 
+ Sent 37649481 bytes 25618 pkt (dropped 0, overlimits 25476 requeues 0) 
+ backlog 0b 0p requeues 0
+ lended: 25618 borrowed: 0 giants: 0
+ tokens: 389875 ctokens: 389875
+
+class htb 1:2 parent 1:fffe prio 1 rate 30Mbit ceil 30Mbit burst 31248b cburst 31248b 
+ Sent 112585936 bytes 75562 pkt (dropped 0, overlimits 75330 requeues 0) 
+ backlog 0b 0p requeues 0
+ lended: 75562 borrowed: 0 giants: 0
+ tokens: -6082 ctokens: -6082
+
+class htb 1:3 parent 1:fffe prio 0 rate 40Mbit ceil 40Mbit burst 25000b cburst 25000b 
+ Sent 149962586 bytes 100647 pkt (dropped 0, overlimits 100383 requeues 0) 
+ backlog 0b 0p requeues 0
+ lended: 100647 borrowed: 0 giants: 0
+ tokens: -4615 ctokens: -4615
+

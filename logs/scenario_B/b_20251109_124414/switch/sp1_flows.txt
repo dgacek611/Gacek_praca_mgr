@@ -1,0 +1,12 @@
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=37.198s, table=0, n_packets=17, n_bytes=1020, priority=65535,dl_dst=01:80:c2:00:00:0e,dl_type=0x88cc actions=CONTROLLER:65535
+ cookie=0x0, duration=37.214s, table=0, n_packets=1, n_bytes=60, priority=30000,dl_type=0x88cc actions=drop
+ cookie=0x0, duration=37.214s, table=0, n_packets=15, n_bytes=1182, priority=10000,ipv6 actions=drop
+ cookie=0x0, duration=37.214s, table=0, n_packets=100647, n_bytes=149962586, priority=20000,ip,nw_tos=184 actions=write_actions(set_queue:2),goto_table:1
+ cookie=0x0, duration=37.214s, table=0, n_packets=75562, n_bytes=112585936, priority=20000,ip,nw_tos=104 actions=write_actions(set_queue:1),goto_table:1
+ cookie=0x0, duration=37.214s, table=0, n_packets=25961, n_bytes=37692183, priority=20000,ip,nw_tos=0 actions=write_actions(set_queue:0),goto_table:1
+ cookie=0x0, duration=37.214s, table=0, n_packets=0, n_bytes=0, priority=0 actions=CONTROLLER:65535
+ cookie=0x0, duration=37.214s, table=0, n_packets=4, n_bytes=168, priority=1 actions=goto_table:1
+ cookie=0x0, duration=33.619s, table=1, n_packets=355, n_bytes=43224, idle_timeout=20, priority=100,dl_dst=da:5b:b9:a4:d5:fa actions=write_actions(output:1)
+ cookie=0x0, duration=33.615s, table=1, n_packets=201813, n_bytes=300197285, idle_timeout=20, priority=100,dl_dst=a2:78:10:24:b8:d2 actions=write_actions(output:2)
+ cookie=0x0, duration=37.214s, table=1, n_packets=6, n_bytes=364, priority=0 actions=CONTROLLER:65535

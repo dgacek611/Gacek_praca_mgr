@@ -1,0 +1,12 @@
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=38.115s, table=0, n_packets=18, n_bytes=1080, priority=65535,dl_dst=01:80:c2:00:00:0e,dl_type=0x88cc actions=CONTROLLER:65535
+ cookie=0x0, duration=38.134s, table=0, n_packets=1, n_bytes=60, priority=30000,dl_type=0x88cc actions=drop
+ cookie=0x0, duration=38.134s, table=0, n_packets=15, n_bytes=1182, priority=10000,ipv6 actions=drop
+ cookie=0x0, duration=38.134s, table=0, n_packets=129487, n_bytes=192934186, priority=20000,ip,nw_tos=184 actions=meter:1,goto_table:1
+ cookie=0x0, duration=38.134s, table=0, n_packets=129487, n_bytes=192934186, priority=20000,ip,nw_tos=104 actions=meter:2,goto_table:1
+ cookie=0x0, duration=38.115s, table=0, n_packets=130208, n_bytes=193013620, priority=20000,ip,nw_tos=0 actions=meter:3,goto_table:1
+ cookie=0x0, duration=38.134s, table=0, n_packets=0, n_bytes=0, priority=0 actions=CONTROLLER:65535
+ cookie=0x0, duration=38.134s, table=0, n_packets=4, n_bytes=168, priority=1 actions=goto_table:1
+ cookie=0x0, duration=34.581s, table=1, n_packets=355, n_bytes=43739, idle_timeout=20, priority=100,dl_dst=6a:e3:5b:bf:0d:63 actions=write_actions(output:1)
+ cookie=0x0, duration=34.576s, table=1, n_packets=388825, n_bytes=578838057, idle_timeout=20, priority=100,dl_dst=2a:d8:a8:3d:62:cb actions=write_actions(output:2)
+ cookie=0x0, duration=38.135s, table=1, n_packets=6, n_bytes=364, priority=0 actions=CONTROLLER:65535

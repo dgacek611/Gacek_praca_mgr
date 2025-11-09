@@ -145,7 +145,7 @@ E) Selekcja ścieżek per klasa (SDN routing) + awaria
 	-awaria: po down’ie linku (np. link s1 s2 down w Mininecie) EF przełącza się < 1 s (z group FF) lub po przeinstalowaniu flowów przez Ryu.
 
 5. ANALIZA:
-	sudo chown -R dorota:dorota /home/dorota/Gacek_praca_mgr/logs/scenario_A
+	sudo chown -R dorota:dorota /home/dorota/Gacek_praca_mgr/logs/scenario_B
 
 	A) 
 	
@@ -158,36 +158,32 @@ E) Selekcja ścieżek per klasa (SDN routing) + awaria
 
 	B)
 	
-		python3 b_analyze_diffserv_htb.py   --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419
-		python3 b_plot_diffserv_htb.py --run-dir /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --out-prefix /media/sf_Gacek_praca_mgr/logs/b_20251030_194419 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
-	
+		python3 b_analyze_diffserv_htb.py --run-dir /home/dorota/Gacek_praca_mgr/logs/scenario_B/b_20251109_112041
+
+		python3 b_analyze_diffserv_htb.py --runs-root /home/dorota/Gacek_praca_mgr/logs/scenario_B
+
+		python b_plot_diffserv_htb.py --csv /home/dorota/Gacek_praca_mgr/logs/scenario_B/all_runs_summary_rx.csv --out-prefix /home/dorota/Gacek_praca_mgr/logs/scenario_B/plots
+
 	C)
 	
-	    python3 c_analyze_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327
-	    python3 c_plot_meters.py --run-dir /media/sf_Gacek_praca_mgr/logs/c_20251030_200327 --out-prefix /media/sf_Gacek_praca_mgr/logs/c_20251030_200327  --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
+		python3 c_analyze_meters.py --run-dir /home/dorota/Gacek_praca_mgr/logs/scenario_C/c_20251109_112041
+
+		python3 c_analyze_meters.py --runs-root /home/dorota/Gacek_praca_mgr/logs/scenario_C
+
+		python c_plot_meters.py --csv /home/dorota/Gacek_praca_mgr/logs/scenario_C/all_runs_summary_rx.csv --out-prefix /home/dorota/Gacek_praca_mgr/logs/scenario_C/plots
 
 6. WYNIKI:
 
-	A) Baseline (bez QoS)
+Topologia: bw=100 Mb/s na wszystkich linkach.
 
-	Bottleneck: 10 Mbit/s (TBF na porcie wyjsciowym S2).
-	Wysyłanie (h1 → h2): EF=6 Mbit/s, AF=6 Mbit/s, BE=6 Mbit/s (suma 18 > 10, celowo).
-	Oczekiwane: wszystkie klasy tracą podobnie; rośnie jitter/loss; EF nie ma przewagi.
+Ruch w A, B i C: zawsze 3 strumienie UDP
 
-	B) DiffServ + kolejki (HTB)
+EF 40 Mb/s, AF 40 Mb/s, BE 40 Mb/s (łącznie 120 Mb/s).
 
-	Bottleneck: 10 Mbit/s (ten sam port).
-	Kolejki HTB na porcie wyjsciowym S2 (min/max):
-	EF: 6/6 Mbit/s, AF: 3/3 Mbit/s, BE: 1/1 Mbit/s (priorytet EF>AF>BE).
-	Wysyłanie (to samo co w A): EF=6, AF=6, BE=6 Mbit/s.
-	Oczekiwane: EF trzyma 6 Mbit/s z niskim jitterem; AF ~3 Mbit/s; BE ~1 Mbit/s; dropy głównie w BE/AF; liczniki kolejek to pokażą.
+Wnioski:
 
-	C) Policing (OpenFlow meters)
-	
-	(Bez kolejek kształtujących – tylko bottleneck 10 Mbit/s dla spójnych warunków).
-	Metery (ENV w kontrolerze):
-		QOS_MODE=meter
-		QOS_EF_MBIT=6, QOS_AF_MBIT=3, QOS_BE_MBIT=1
-		(opcjonalnie bursty: QOS_EF_BURST_MB=1, QOS_AF_BURST_MB=1, QOS_BE_BURST_MB=2)
-	Wysyłanie EF=12 Mbit/s, AF=6 Mbit/s, BE=2 Mbit/s.
-	Oczekiwane: throughput każdej klasy przycięty do 6/3/1 Mbit/s, wzrost loss ponad limitem; brak zmian trasy (dump-flows bez dodatkowych OUTPUT).
+	A) pokaż, że mimo różnych DSCP wszystkie klasy zachowują się jak BE, link 100 Mb/s, offered 120 Mb/s -> wszystkie trzy klasy wchodzą w konkurencję Best Effort, DSCP jest ustawione, ale brak kolejek/metrów, więc metryki (throughput/jitter/loss) powinny być podobne dla wszystkich przy nasyceniu.
+
+	B) przy tym samym ruchu pojawiają się priorytety (kolejki HTB),	dalej te same 3×40 Mb/s, na bottlenecku HTB: EF - gwarantowane 40 Mb/s, AF - min 20 Mb/s, BE - reszta / best-effort, wtedy w przeciążeniu widać wyraźnie, że EF trzyma parametry, AF „średnio”, a BE obrywa najbardziej – a ruch generujący jest identyczny jak w A.
+
+	C) przy tym samym ruchu widać różnicę „shaping vs policing”, znów te same 3×40 Mb/s, na EF meter 40 Mb/s CIR, EF ma throughput „przycięty” do ~40 Mb/s, AF -> 30 Mb/s, BE -> 10 Mb/s

@@ -98,7 +98,7 @@ class QosEdgeOnly(QoSTreeController):
         self.m_be = _env_int("QOS_BE_METER_ID", 3)
 
         # Stawki z ENV (w MBIT) -> przelicz na kbps (x1000)
-        self.ef_kbps = _env_int("QOS_EF_MBIT", 60) * 1000
+        self.ef_kbps = _env_int("QOS_EF_MBIT", 40) * 1000
         self.af_kbps = _env_int("QOS_AF_MBIT", 30) * 1000
         self.be_kbps = _env_int("QOS_BE_MBIT", 10) * 1000
 

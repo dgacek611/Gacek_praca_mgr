@@ -6,6 +6,11 @@ Analyze Scenario C: Policing (OpenFlow meters) — cięcie nadmiaru.
 - Weryfikuje obecność meterów w flowach oraz BRAK OUTPUT w Table 0.
 - Parsuje "dump-meters" i "meter-stats" z OVS (dla s1/s2/s3).
 - Generuje raport Markdown + CSV zbiorczy (iperf + statystyki meterów).
+
+Tryby:
+- pojedynczy run:  --run-dir /ścieżka/do/run_C_...
+- wiele runów:     --runs-root /ścieżka/do/C_runs/   (wszystkie podkatalogi)
+
 Struktura katalogu wejściowego (jak generuje run_traffic.py):
 run_dir/
   clients/
@@ -123,7 +128,7 @@ def parse_flows_table0(path: str) -> Dict[str, Any]:
                 out["table0_with_set_queue"] += 1
     return out
 
-# -------------------------- OVS meters parser (POPRAWIONY) --------------------
+# -------------------------- OVS meters parser ---------------------------------
 
 def parse_meters_stats(path: str) -> Dict[str, Any]:
     """
@@ -162,7 +167,6 @@ def parse_meters_stats(path: str) -> Dict[str, Any]:
             rec["burst_kb"] = int(m_burst.group(1))  # w OF to kbit; nazwa kolumny zostaje 'kb'
 
         # 3) Statystyki bandu DROP
-        # Najpierw spróbuj jedną parą (packet_count + byte_count) w tej samej linii po numerze bandu.
         m_pair = re.search(
             r"\bbands?\s*:\s*(?:\n\s*)?\d+\s*:\s*.*?\bpacket_count\s*[:=]\s*(\d+)\s+.*?\bbyte_count\s*[:=]\s*(\d+)",
             block, re.IGNORECASE | re.DOTALL
@@ -171,7 +175,6 @@ def parse_meters_stats(path: str) -> Dict[str, Any]:
             rec["drops_pkts"] = int(m_pair.group(1))
             rec["drops_bytes"] = int(m_pair.group(2))
         else:
-            # Jeśli nie, spróbuj wyłuskać je osobno z sekcji 'bands:' ...
             m_band_pkt = re.search(
                 r"\bbands?\s*:\s*(?:\n\s*)?\d+\s*:\s*.*?\bpacket_count\s*[:=]\s*(\d+)",
                 block, re.IGNORECASE | re.DOTALL
@@ -180,7 +183,6 @@ def parse_meters_stats(path: str) -> Dict[str, Any]:
                 r"\bbands?\s*:\s*(?:\n\s*)?\d+\s*:\s*.*?\bbyte_count\s*[:=]\s*(\d+)",
                 block, re.IGNORECASE | re.DOTALL
             )
-            # ... albo z wariantu 'band-stats { ... }'
             if not m_band_pkt:
                 m_band_pkt = re.search(
                     r"\bband[-\s]*stats\b.*?\bpacket_count\s*[:=]\s*(\d+)",
@@ -295,7 +297,7 @@ def write_report(analysis: Dict[str, Any], out_md: str, out_csv_ip: str, out_csv
     lines.append(f"- SetQueue w Table 0 (oznaka trybu kolejkowania, NIE policing): *{checks.get('table0_has_set_queue', False)}*")
     lines.append(f"- OUTPUT w Table 0 (niepożądane): *{checks.get('table0_has_output', False)}*")
     lines.append("Plik | table0_rules | table0_with_meter | table0_with_set_queue | table0_with_output")
-    lines.append("---|---:|---:|---:")
+    lines.append("---|---:|---:|---:|---:")
     for fname, v in (analysis.get("flows_table0") or {}).items():
         lines.append(f"{fname} | {v.get('table0_rules',0)} | {v.get('table0_with_meter',0)} | {v.get('table0_with_set_queue',0)} | {v.get('table0_with_output',0)}")
     lines.append("")
@@ -336,25 +338,78 @@ def write_report(analysis: Dict[str, Any], out_md: str, out_csv_ip: str, out_csv
             for mid, s in sorted((data.get("meters") or {}).items()):
                 w.writerow([fname, mid, s.get("rate_kbps",""), s.get("burst_kb",""), s.get("drops_pkts",""), s.get("drops_bytes","")])
 
+# -------------------------- main: pojedynczy run / wiele runów ----------------
+
 def main():
-    ap = argparse.ArgumentParser(description="Analyze Scenario C: Policing (OpenFlow meters) run directory.")
-    ap.add_argument("--run-dir", required=True, help="Directory created by run_traffic.py (scenario C)")
-    ap.add_argument("--out-dir", default=None, help="Gdzie zapisać raporty; domyślnie do --run-dir")
+    ap = argparse.ArgumentParser(description="Analyze Scenario C: Policing (OpenFlow meters) results.")
+    ap.add_argument("--run-dir", help="Pojedynczy katalog run (jak z run_traffic.py dla scenariusza C)")
+    ap.add_argument("--runs-root", help="Katalog zawierający wiele katalogów run (każdy osobno analizowany)")
+    ap.add_argument("--out-dir", default=None, help="Gdzie zapisać raporty; domyślnie: do danego katalogu run / runs-root")
     args = ap.parse_args()
 
-    analysis = analyze_run(args.run_dir)
+    if not args.run_dir and not args.runs_root:
+        ap.error("Podaj albo --run-dir (pojedynczy run), albo --runs-root (wiele runów).")
 
-    out_dir = args.out_dir or args.run_dir
-    os.makedirs(out_dir, exist_ok=True)
-    out_md  = os.path.join(out_dir, "policing_meters_report.md")
-    out_csv_ip = os.path.join(out_dir, "policing_summary_rx.csv")
-    out_csv_m  = os.path.join(out_dir, "policing_meters_stats.csv")
-    write_report(analysis, out_md, out_csv_ip, out_csv_m)
+    # Tryb: wiele runów
+    if args.runs_root:
+        root = args.runs_root
+        if not os.path.isdir(root):
+            raise SystemExit(f"--runs-root '{root}' nie jest katalogiem")
 
-    print("OK. Wygenerowano:")
-    print(" -", out_md)
-    print(" -", out_csv_ip)
-    print(" -", out_csv_m)
+        all_rows = []
+        for name in sorted(os.listdir(root)):
+            run_path = os.path.join(root, name)
+            if not os.path.isdir(run_path):
+                continue
+
+            print(f"[i] Analiza runu: {run_path}")
+            analysis = analyze_run(run_path)
+
+            out_dir_run = args.out_dir or run_path
+            os.makedirs(out_dir_run, exist_ok=True)
+            out_md  = os.path.join(out_dir_run, "policing_meters_report.md")
+            out_csv_ip = os.path.join(out_dir_run, "policing_summary_rx.csv")
+            out_csv_m  = os.path.join(out_dir_run, "policing_meters_stats.csv")
+            write_report(analysis, out_md, out_csv_ip, out_csv_m)
+
+            iperf = analysis.get("iperf", {})
+            for cls in ("EF", "AF31", "BE"):
+                s = iperf.get(cls, {})
+                all_rows.append({
+                    "run": name,
+                    "class": cls,
+                    "throughput_rx_Mbps": s.get("throughput_rx_Mbps", ""),
+                    "jitter_ms": s.get("jitter_ms", ""),
+                    "loss_pct": s.get("loss_pct", ""),
+                })
+
+        combo_out_dir = args.out_dir or args.runs_root
+        os.makedirs(combo_out_dir, exist_ok=True)
+        combo_csv = os.path.join(combo_out_dir, "all_runs_summary_rx.csv")
+        with open(combo_csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=["run","class","throughput_rx_Mbps","jitter_ms","loss_pct"])
+            w.writeheader()
+            for row in all_rows:
+                w.writerow(row)
+
+        print(f"\nOK. Wygenerowano zbiorczy plik: {combo_csv}")
+
+    # Tryb: pojedynczy run
+    if args.run_dir and not args.runs_root:
+        run_dir = args.run_dir
+        analysis = analyze_run(run_dir)
+
+        out_dir = args.out_dir or run_dir
+        os.makedirs(out_dir, exist_ok=True)
+        out_md  = os.path.join(out_dir, "policing_meters_report.md")
+        out_csv_ip = os.path.join(out_dir, "policing_summary_rx.csv")
+        out_csv_m  = os.path.join(out_dir, "policing_meters_stats.csv")
+        write_report(analysis, out_md, out_csv_ip, out_csv_m)
+
+        print("OK. Wygenerowano:")
+        print(" -", out_md)
+        print(" -", out_csv_ip)
+        print(" -", out_csv_m)
 
 if __name__ == "__main__":
     main()

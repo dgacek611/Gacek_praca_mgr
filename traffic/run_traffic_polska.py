@@ -18,9 +18,9 @@ from mininet.log import setLogLevel, info
 BOTTLENECK_DEV_DEFAULT = "sp1-eth2"
 
 # Domyślne szybkości strumieni iperf3 (w Mbit/s)
-IPERF_EF_MBIT = 40
-IPERF_AF_MBIT = 40
-IPERF_BE_MBIT = 40
+IPERF_EF_MBIT = 50
+IPERF_AF_MBIT = 50
+IPERF_BE_MBIT = 50
 
 # Wartości DSCP użyte w eksperymencie
 DSCP_EF = 46
@@ -407,7 +407,7 @@ def setup_qos_for_scenario(
         destroy_tc_root(dev)
         # Stałe limity dla kolejek EF/AF/BE (bit/s)
         queues = {
-            2: {"min": 60_000_000, "max": 60_000_000, "priority": 0, "burst": 200_000},   # EF (najwyższy priorytet)
+            2: {"min": 40_000_000, "max": 40_000_000, "priority": 0, "burst": 200_000},   # EF (najwyższy priorytet)
             1: {"min": 30_000_000, "max": 30_000_000, "priority": 1, "burst": 250_000},   # AF
             0: {"min": 10_000_000, "max": 10_000_000, "priority": 2, "burst": 250_000},   # BE
         }

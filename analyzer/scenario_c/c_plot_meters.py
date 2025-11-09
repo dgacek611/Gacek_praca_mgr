@@ -1,8 +1,7 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os, json, argparse, re
+import os, argparse, math, csv
 import matplotlib.pyplot as plt
 
 # ========= Wspólne ustawienia wyglądu (spójność A/B/C) =========
@@ -31,9 +30,11 @@ def _annotate_bars(ax):
                         ha="center", va="bottom", xytext=(0, 3),
                         textcoords="offset points", fontsize=ANNOT_FONTSIZE)
 
-def _bar_plot(labels, values, title, ylabel, out_png, ylim=None):
+def _bar_plot(labels, values, title, ylabel, out_png, ylim=None, yerr=None):
     fig = plt.figure()
-    plt.bar(range(len(labels)), values, tick_label=labels)
+    x = range(len(labels))
+    # error bary z 95% CI
+    plt.bar(x, values, tick_label=labels, yerr=yerr, capsize=5 if yerr is not None else 0)
     ax = plt.gca()
     _apply_axes_style(ax, title, ylabel, ylim=ylim)
     _annotate_bars(ax)
@@ -41,93 +42,131 @@ def _bar_plot(labels, values, title, ylabel, out_png, ylim=None):
     plt.savefig(out_png, dpi=180)
     plt.close(fig)
 
-def _read_json(p):
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+def _mean_ci95(values):
+    """
+    Zwraca (mean, half_width_95CI) dla listy wartości.
+    Ignoruje NaN / puste teksty.
+    """
+    cleaned = []
+    for v in values:
+        if isinstance(v, (int, float)):
+            if not math.isnan(v):
+                cleaned.append(float(v))
+        else:
+            # np. pusty string z CSV
+            try:
+                fv = float(v)
+                if not math.isnan(fv):
+                    cleaned.append(fv)
+            except Exception:
+                continue
 
-def _parse_iperf(d):
-    end = d.get("end", {})
-    s = end.get("sum_received") or end.get("sum") or end.get("sum_sent") or {}
-    bps = s.get("bits_per_second")
-    tput = (bps / 1e6) if isinstance(bps, (int, float)) else float("nan")
-    jitter = s.get("jitter_ms", float("nan"))
-    lost = s.get("lost_packets", 0)
-    sent = s.get("packets", 0)
-    if "lost_percent" in s:
-        loss = s["lost_percent"]
+    if not cleaned:
+        return float("nan"), float("nan")
+
+    n = len(cleaned)
+    mean = sum(cleaned) / n
+    if n > 1:
+        var = sum((x - mean) ** 2 for x in cleaned) / (n - 1)
+        std = math.sqrt(var)
+        z = 1.96  # przybliżenie dla 95% (normalny)
+        half_width = z * std / math.sqrt(n)
     else:
-        loss = (100.0 * lost / sent) if sent else float("nan")
-    return tput, jitter, loss
+        std = float("nan")
+        half_width = float("nan")
 
-def _load_metrics_simple(run_dir):
-    vals = {}
-    for label, fn in [("EF","ef.json"), ("AF31","af31.json"), ("BE","be.json")]:
-        p = os.path.join(run_dir, "clients", fn)
-        t, j, l = _parse_iperf(_read_json(p))
-        vals[label] = {"throughput": t, "jitter": j, "loss": l}
-    # reindex to ORDER
-    return {k: vals.get(k, {"throughput": float("nan"), "jitter": float("nan"), "loss": float("nan")}) for k in ORDER}
+    return mean, half_width
 
-def _parse_meters_drops(run_dir):
-    switch = os.path.join(run_dir, "switch")
-    drops = {}
-    if not os.path.isdir(switch):
-        return drops
-    for fname in os.listdir(switch):
-        if not fname.endswith("_meters.txt"):
-            continue
-        try:
-            txt = open(os.path.join(switch, fname), "r", encoding="utf-8", errors="ignore").read()
-            import re as _re
-            for block in _re.split(r"(?=meter\s*=\s*\d+)", txt, flags=_re.IGNORECASE):
-                m_id = _re.search(r"meter\s*=\s*(\d+)", block, _re.IGNORECASE)
-                if not m_id:
-                    continue
-                mid = int(m_id.group(1))
-                m_pkt = _re.search(r"(?:pkt_count|packet_count)\s*[:=]\s*(\d+)", block, _re.IGNORECASE)
-                d = int(m_pkt.group(1)) if m_pkt else 0
-                drops[mid] = drops.get(mid, 0) + d
-        except Exception:
-            pass
-    return drops
+def _load_metrics_from_csv(csv_path):
+    """
+    Czyta all_runs_summary_rx.csv i liczy średnie + 95% CI
+    dla throughput / jitter / loss per klasa (BE, AF31, EF).
+    Zwraca dict:
+      { 'BE':  {'thr_mean':..., 'thr_ci':..., 'jit_mean':..., ...},
+        'AF31': {...},
+        'EF':   {...} }
+    """
+    # zbierz wartości z wszystkich runów
+    data = {cls: {"thr": [], "jit": [], "loss": []} for cls in ORDER}
+
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            cls = row.get("class")
+            if cls not in data:
+                continue
+            # throughput
+            t = row.get("throughput_rx_Mbps", "")
+            j = row.get("jitter_ms", "")
+            l = row.get("loss_pct", "")
+
+            for key, raw in (("thr", t), ("jit", j), ("loss", l)):
+                try:
+                    v = float(raw)
+                except Exception:
+                    v = float("nan")
+                data[cls][key].append(v)
+
+    # policz średnie i CI
+    stats = {}
+    for cls in ORDER:
+        thr_mean, thr_ci = _mean_ci95(data[cls]["thr"])
+        jit_mean, jit_ci = _mean_ci95(data[cls]["jit"])
+        loss_mean, loss_ci = _mean_ci95(data[cls]["loss"])
+        stats[cls] = {
+            "throughput_mean": thr_mean,
+            "throughput_ci": thr_ci,
+            "jitter_mean": jit_mean,
+            "jitter_ci": jit_ci,
+            "loss_mean": loss_mean,
+            "loss_ci": loss_ci,
+        }
+    return stats
 
 def main():
-    ap = argparse.ArgumentParser(description="Plot Scenario C (Policing / meters) charts")
-    ap.add_argument("--run-dir", required=True, help="Katalog z wynikami scenariusza C")
-    ap.add_argument("--out-prefix", default="/mnt/data/", help="Prefiks ścieżki wyjściowej")
+    ap = argparse.ArgumentParser(description="Plot Scenario A (Baseline) EF/AF/BE stats (średnia ± 95% CI)")
+    ap.add_argument("--csv", required=True, help="Ścieżka do all_runs_summary_rx.csv (z wielu runów scenariusza A)")
+    ap.add_argument("--out-prefix", default=".", help="Prefiks ścieżki wyjściowej (katalog)")
     # Jednolite skale
-    ap.add_argument("--ylim-throughput", nargs=2, type=float, default=[0.0, 10.0], metavar=("YMIN","YMAX"))
+    ap.add_argument("--ylim-throughput", nargs=2, type=float, default=[0.0, 60.0], metavar=("YMIN","YMAX"))
     ap.add_argument("--ylim-loss",       nargs=2, type=float, default=[0.0, 100.0], metavar=("YMIN","YMAX"))
-    ap.add_argument("--ylim-jitter",     nargs=2, type=float, default=[0.0, 50.0], metavar=("YMIN","YMAX"))
+    ap.add_argument("--ylim-jitter",     nargs=2, type=float, default=[0.0, 10.0],  metavar=("YMIN","YMAX"))
     args = ap.parse_args()
 
-    vals = _load_metrics_simple(args.run_dir)
+    stats = _load_metrics_from_csv(args.csv)
     labels = list(ORDER)
 
-    _bar_plot(labels, [vals[k]["throughput"] for k in labels],
-              "Throughput (RX) — Policing (Scenario C)", "Mb/s",
-              os.path.join(args.out_prefix, "c_throughput_rx.png"),
-              ylim=tuple(args.ylim_throughput))
-    _bar_plot(labels, [vals[k]["loss"] for k in labels],
-              "Packet loss — Policing (Scenario C)", "%",
-              os.path.join(args.out_prefix, "c_loss_rx.png"),
-              ylim=tuple(args.ylim_loss))
-    _bar_plot(labels, [vals[k]["jitter"] for k in labels],
-              "Jitter — Policing (Scenario C)", "ms",
-              os.path.join(args.out_prefix, "c_jitter_rx.png"),
-              ylim=tuple(args.ylim_jitter))
+    thr_means = [stats[k]["throughput_mean"] for k in labels]
+    thr_cis   = [stats[k]["throughput_ci"]   for k in labels]
 
-    md = _parse_meters_drops(args.run_dir)
-    if md:
-        mlab = [f"m{m}" for m in sorted(md.keys())]
-        mval = [md[m] for m in sorted(md.keys())]
-        _bar_plot(mlab, mval, "Meter drops per meter_id", "packets",
-                  os.path.join(args.out_prefix, "c_meter_drops.png"))
+    loss_means = [stats[k]["loss_mean"] for k in labels]
+    loss_cis   = [stats[k]["loss_ci"]   for k in labels]
 
-    print("OK: zapisano C-wykresy do", args.out_prefix)
+    jit_means = [stats[k]["jitter_mean"] for k in labels]
+    jit_cis   = [stats[k]["jitter_ci"]   for k in labels]
+
+    out_dir = args.out_prefix
+    os.makedirs(out_dir, exist_ok=True)
+
+    _bar_plot(labels, thr_means,
+              "Policing (Scenario C)", "Throughput (RX) [Mb/s]",
+              os.path.join(out_dir, "c_throughput_rx_ci.png"),
+              ylim=tuple(args.ylim_throughput),
+              yerr=thr_cis)
+
+    _bar_plot(labels, loss_means,
+              "Policing (Scenario C)", "Packet loss [%]",
+              os.path.join(out_dir, "c_loss_rx_ci.png"),
+              ylim=tuple(args.ylim_loss),
+              yerr=loss_cis)
+
+    _bar_plot(labels, jit_means,
+              "Policing (Scenario C)", "Jitter [ms]",
+              os.path.join(out_dir, "c_jitter_rx_ci.png"),
+              ylim=tuple(args.ylim_jitter),
+              yerr=jit_cis)
+
+    print("OK: zapisano A-wykresy (średnia ± 95% CI) do", out_dir)
 
 if __name__ == "__main__":
     main()
