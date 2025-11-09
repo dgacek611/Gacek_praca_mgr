@@ -389,7 +389,6 @@ def setup_qos_for_scenario(
 
     dev = bottleneck_dev
     clear_ovs_qos(dev)
-    destroy_tc_root(dev)
 
     # Wyłączenie offloadów – nie jest krytyczne, więc łapiemy wyjątki
     try:
@@ -401,9 +400,11 @@ def setup_qos_for_scenario(
         info(f"[QoS] A/Baseline: brak zmian QoS na {dev}\n")
 
     elif mode == "meter":
+        destroy_tc_root(dev)
         info("[QoS] C/METERS: przygotowanie pod metry (kontroler zainstaluje OF meters)\n")
 
     elif mode == "htb":
+        destroy_tc_root(dev)
         # Stałe limity dla kolejek EF/AF/BE (bit/s)
         queues = {
             2: {"min": 60_000_000, "max": 60_000_000, "priority": 0, "burst": 200_000},   # EF (najwyższy priorytet)
@@ -715,7 +716,6 @@ def main() -> None:
         controller=None,
         link=partial(TCLink, use_tbf=True),
         switch=partial(OVSSwitch, protocols="OpenFlow13"),
-        cleanup=True,
     )
     c0 = net.addController(
         name="c0",

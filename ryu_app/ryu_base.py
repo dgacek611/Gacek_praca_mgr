@@ -2,7 +2,7 @@ from typing import Dict, Set, Tuple, Optional
 
 from ryu.base import app_manager
 from ryu.controller import ofp_event
-from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, set_ev_cls
+from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, DEAD_DISPATCHER, set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import ether_types
 from ryu.topology import event as topo_event
@@ -52,7 +52,7 @@ class QoSTreeBase(app_manager.RyuApp):
         dp = ev.datapath
         if ev.state == MAIN_DISPATCHER:
             self.datapaths[dp.id] = dp
-        elif ev.state == 'dead' and dp.id in self.datapaths:
+        elif ev.state == DEAD_DISPATCHER and dp.id in self.datapaths:
             self.datapaths.pop(dp.id, None)
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -244,7 +244,6 @@ class QoSTreeBase(app_manager.RyuApp):
 
         # Usuwamy krawędź v->u (kod zachowany 1:1 z oryginałem)
         if v in self.graph and u in self.graph[v]:
-            self.graph[v].pop(v := v, None)  # pozostawione dla zachowania identycznej semantyki
             self.graph[v].pop(u, None)
             if not self.graph[v]:
                 self.graph.pop(v, None)
