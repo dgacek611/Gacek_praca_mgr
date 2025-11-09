@@ -47,7 +47,6 @@
 			--controller-ip 127.0.0.1 --controller-port 6653 \
 			--duration 30 \
 			--scenario a \
-			--bottleneck-dev auto-sp1 \
 			--log-dir /home/dorota/Gacek_praca_mgr/logs/scenario_A
   
 	B)
@@ -146,11 +145,16 @@ E) Selekcja ścieżek per klasa (SDN routing) + awaria
 	-awaria: po down’ie linku (np. link s1 s2 down w Mininecie) EF przełącza się < 1 s (z group FF) lub po przeinstalowaniu flowów przez Ryu.
 
 5. ANALIZA:
+	sudo chown -R dorota:dorota /home/dorota/Gacek_praca_mgr/logs/scenario_A
 
 	A) 
 	
-		python3 analyze_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809
-		python3 plot_baseline.py   --run-dir /media/sf_Gacek_praca_mgr/logs/a_20251030_192809   --out-prefix /media/sf_Gacek_praca_mgr/logs/a_20251030_192809 --ylim-throughput 0 10 --ylim-loss 0 100 --ylim-jitter 0 50
+		python3 analyze_baseline.py --run-dir /home/dorota/Gacek_praca_mgr/logs/scenario_A/a_20251109_112041
+
+		python3 analyze_baseline.py --runs-root /home/dorota/Gacek_praca_mgr/logs/scenario_A
+
+		python plot_baseline.py --csv /home/dorota/Gacek_praca_mgr/logs/scenario_A/all_runs_summary_rx.csv --out-prefix /home/dorota/Gacek_praca_mgr/logs/scenario_A/plots
+
 
 	B)
 	

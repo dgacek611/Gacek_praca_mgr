@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os, json, re, argparse
+import os, json, re, argparse, csv
 from typing import Dict, Any, List, Tuple
 from datetime import datetime
 
@@ -58,7 +58,7 @@ def parse_ping_txt(path: str) -> Dict[str, float]:
         if m_loss:
             out["packet_loss_pct"] = float(m_loss.group(1).replace(",", "."))
 
-        # 2) Fallback: policz z pojedynczych odpowiedzi (Twój przypadek)
+        # 2) Fallback: policz z pojedynczych odpowiedzi
         if math.isnan(out["rtt_avg_ms"]) or math.isnan(out["packet_loss_pct"]):
             times = [float(x.replace(",", ".")) 
                      for x in re.findall(r"time=([\d.,]+)\s*ms", txt)]
@@ -151,13 +151,24 @@ def write_report(analysis: Dict[str, Any], out_md: str, out_csv: str) -> None:
     lines.append("---|---:|---:|---:")
     for cls in ("EF", "AF31", "BE"):
         s = iperf.get(cls, {})
-        lines.append(f"{cls} | {s.get('throughput_rx_Mbps', float('nan')):.3f} | {s.get('jitter_ms', float('nan')):.3f} | {s.get('loss_pct', float('nan')):.3f}")
+        lines.append(
+            f"{cls} | "
+            f"{s.get('throughput_rx_Mbps', float('nan')):.3f} | "
+            f"{s.get('jitter_ms', float('nan')):.3f} | "
+            f"{s.get('loss_pct', float('nan')):.3f}"
+        )
     lines.append("")
     ping = analysis.get("ping", {})
     lines.append("## Ping (h1→h2)")
     if ping:
         lines.append(f"- Packet loss: {ping.get('packet_loss_pct', float('nan')):.2f}%")
-        lines.append(f"- RTT min/avg/max/mdev: {ping.get('rtt_min_ms', float('nan')):.3f} / {ping.get('rtt_avg_ms', float('nan')):.3f} / {ping.get('rtt_max_ms', float('nan')):.3f} / {ping.get('rtt_mdev_ms', float('nan')):.3f} ms")
+        lines.append(
+            "- RTT min/avg/max/mdev: "
+            f"{ping.get('rtt_min_ms', float('nan')):.3f} / "
+            f"{ping.get('rtt_avg_ms', float('nan')):.3f} / "
+            f"{ping.get('rtt_max_ms', float('nan')):.3f} / "
+            f"{ping.get('rtt_mdev_ms', float('nan')):.3f} ms"
+        )
     else:
         lines.append("- brak danych ping.txt")
     lines.append("")
@@ -168,33 +179,92 @@ def write_report(analysis: Dict[str, Any], out_md: str, out_csv: str) -> None:
     lines.append(f"- Brak reguł QoS (ip_dscp/set_queue/meter) w dump-flows: **{checks.get('no_qos_flows', False)}**")
     lines.append(f"- Uwaga: {checks.get('note','')}")
     lines.append("")
+
     with open(out_md, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
-    # CSV (RX)
-    import csv
+    # CSV (RX, per run)
     with open(out_csv, "w", newline="", encoding="utf-8") as csvfile:
         w = csv.writer(csvfile)
         w.writerow(["class","throughput_rx_Mbps","jitter_ms","loss_pct"])
         for cls in ("EF", "AF31", "BE"):
             s = iperf.get(cls, {})
-            w.writerow([cls, s.get("throughput_rx_Mbps",""), s.get("jitter_ms",""), s.get("loss_pct","")])
+            w.writerow([
+                cls,
+                s.get("throughput_rx_Mbps",""),
+                s.get("jitter_ms",""),
+                s.get("loss_pct","")
+            ])
 
 def main():
-    ap = argparse.ArgumentParser(description="Analyze Scenario A baseline run directory.")
-    ap.add_argument("--run-dir", required=True, help="Directory created by run_traffic.py (scenario A)")
-    ap.add_argument("--out-dir", default=None, help="Gdzie zapisać raporty; domyślnie do --run-dir")
+    ap = argparse.ArgumentParser(description="Analyze Scenario A baseline results.")
+    ap.add_argument("--run-dir", help="Pojedynczy katalog run (jak z run_traffic.py)")
+    ap.add_argument("--runs-root", help="Katalog zawierający wiele katalogów run (każdy osobno analizowany)")
+    ap.add_argument("--out-dir", default=None, help="Gdzie zapisać raporty; domyślnie: do danego katalogu run / runs-root")
     args = ap.parse_args()
 
-    analysis = analyze_run(args.run_dir)
+    if not args.run_dir and not args.runs_root:
+        ap.error("Podaj albo --run-dir (pojedynczy run), albo --runs-root (wiele runów).")
 
-    out_dir = args.out_dir or args.run_dir
-    os.makedirs(out_dir, exist_ok=True)
-    out_md = os.path.join(out_dir, "baseline_report.md")
-    out_csv = os.path.join(out_dir, "baseline_summary_rx.csv")
-    write_report(analysis, out_md, out_csv)
+    # Tryb: wiele runów w jednym katalogu
+    if args.runs_root:
+        root = args.runs_root
+        if not os.path.isdir(root):
+            raise SystemExit(f"--runs-root '{root}' nie jest katalogiem")
 
-    print(f"OK. Wygenerowano:\n - {out_md}\n - {out_csv}")
+        all_rows = []
+        # każdy podkatalog traktujemy jako osobny run
+        for name in sorted(os.listdir(root)):
+            run_path = os.path.join(root, name)
+            if not os.path.isdir(run_path):
+                continue
+
+            print(f"[i] Analiza runu: {run_path}")
+            analysis = analyze_run(run_path)
+
+            # raporty per-run – domyślnie do samego runu
+            out_dir_run = args.out_dir or run_path
+            os.makedirs(out_dir_run, exist_ok=True)
+            out_md = os.path.join(out_dir_run, "baseline_report.md")
+            out_csv = os.path.join(out_dir_run, "baseline_summary_rx.csv")
+            write_report(analysis, out_md, out_csv)
+
+            # zbiorczy wiersz do all_runs_summary_rx.csv
+            iperf = analysis.get("iperf", {})
+            for cls in ("EF", "AF31", "BE"):
+                s = iperf.get(cls, {})
+                all_rows.append({
+                    "run": name,
+                    "class": cls,
+                    "throughput_rx_Mbps": s.get("throughput_rx_Mbps", ""),
+                    "jitter_ms": s.get("jitter_ms", ""),
+                    "loss_pct": s.get("loss_pct", ""),
+                })
+
+        # zapis zbiorczego CSV
+        combo_out_dir = args.out_dir or args.runs_root
+        os.makedirs(combo_out_dir, exist_ok=True)
+        combo_csv = os.path.join(combo_out_dir, "all_runs_summary_rx.csv")
+        with open(combo_csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=["run","class","throughput_rx_Mbps","jitter_ms","loss_pct"])
+            w.writeheader()
+            for row in all_rows:
+                w.writerow(row)
+
+        print(f"\nOK. Wygenerowano zbiorczy plik: {combo_csv}")
+
+    # Tryb: pojedynczy run (tak jak wcześniej)
+    if args.run_dir and not args.runs_root:
+        run_dir = args.run_dir
+        analysis = analyze_run(run_dir)
+
+        out_dir = args.out_dir or run_dir
+        os.makedirs(out_dir, exist_ok=True)
+        out_md = os.path.join(out_dir, "baseline_report.md")
+        out_csv = os.path.join(out_dir, "baseline_summary_rx.csv")
+        write_report(analysis, out_md, out_csv)
+
+        print(f"OK. Wygenerowano:\n - {out_md}\n - {out_csv}")
 
 if __name__ == "__main__":
     main()

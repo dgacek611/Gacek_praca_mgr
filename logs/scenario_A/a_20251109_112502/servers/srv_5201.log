@@ -1,0 +1,45 @@
+-----------------------------------------------------------
+Server listening on 5201 (test #1)
+-----------------------------------------------------------
+Accepted connection from 10.0.0.1, port 33698
+[  5] local 10.0.0.2 port 5201 connected to 10.0.0.1 port 36063
+[ ID] Interval           Transfer     Bitrate         Jitter    Lost/Total Datagrams
+[  5]   0.00-1.00   sec  3.97 MBytes  33.3 Mbits/sec  0.959 ms  30/2908 (1%)  
+[  5]   1.00-2.00   sec  4.33 MBytes  36.3 Mbits/sec  0.955 ms  324/3456 (9.4%)  
+[  5]   2.00-3.00   sec  4.51 MBytes  37.8 Mbits/sec  1.726 ms  191/3457 (5.5%)  
+[  5]   3.00-4.00   sec  4.64 MBytes  38.9 Mbits/sec  1.556 ms  95/3454 (2.8%)  
+[  5]   4.00-5.00   sec  4.59 MBytes  38.5 Mbits/sec  1.104 ms  125/3450 (3.6%)  
+[  5]   5.00-6.00   sec  4.63 MBytes  38.8 Mbits/sec  1.840 ms  102/3453 (3%)  
+[  5]   6.00-7.00   sec  4.20 MBytes  35.2 Mbits/sec  1.831 ms  419/3459 (12%)  
+[  5]   7.00-8.00   sec  4.57 MBytes  38.4 Mbits/sec  1.059 ms  137/3448 (4%)  
+[  5]   8.00-9.00   sec  4.61 MBytes  38.7 Mbits/sec  1.473 ms  110/3449 (3.2%)  
+[  5]   9.00-10.00  sec  4.61 MBytes  38.7 Mbits/sec  1.609 ms  121/3461 (3.5%)  
+[  5]  10.00-11.00  sec  4.58 MBytes  38.4 Mbits/sec  1.389 ms  130/3448 (3.8%)  
+[  5]  11.00-12.00  sec  4.27 MBytes  35.8 Mbits/sec  1.300 ms  132/3225 (4.1%)  
+[  5]  12.00-13.00  sec  4.52 MBytes  37.9 Mbits/sec  1.488 ms  411/3682 (11%)  
+[  5]  13.00-14.00  sec  4.57 MBytes  38.3 Mbits/sec  1.257 ms  148/3455 (4.3%)  
+[  5]  14.00-15.00  sec  4.63 MBytes  38.8 Mbits/sec  0.993 ms  100/3452 (2.9%)  
+[  5]  15.00-16.00  sec  4.16 MBytes  34.9 Mbits/sec  1.559 ms  436/3445 (13%)  
+[  5]  16.00-17.00  sec  4.50 MBytes  37.7 Mbits/sec  1.754 ms  204/3462 (5.9%)  
+[  5]  17.00-18.00  sec  4.21 MBytes  35.3 Mbits/sec  1.399 ms  405/3451 (12%)  
+[  5]  18.00-19.00  sec  4.52 MBytes  37.9 Mbits/sec  1.268 ms  180/3452 (5.2%)  
+[  5]  19.00-20.00  sec  4.61 MBytes  38.6 Mbits/sec  1.273 ms  120/3455 (3.5%)  
+[  5]  20.00-21.00  sec  4.33 MBytes  36.3 Mbits/sec  1.273 ms  318/3453 (9.2%)  
+[  5]  21.00-22.00  sec  4.59 MBytes  38.5 Mbits/sec  1.235 ms  128/3451 (3.7%)  
+[  5]  22.00-23.00  sec  4.64 MBytes  38.9 Mbits/sec  1.709 ms  98/3456 (2.8%)  
+[  5]  23.00-24.00  sec  4.40 MBytes  36.9 Mbits/sec  1.138 ms  262/3448 (7.6%)  
+[  5]  24.00-25.00  sec  4.64 MBytes  38.9 Mbits/sec  1.442 ms  94/3455 (2.7%)  
+[  5]  25.00-26.00  sec  4.50 MBytes  37.7 Mbits/sec  1.188 ms  195/3452 (5.6%)  
+[  5]  26.00-27.00  sec  4.60 MBytes  38.6 Mbits/sec  1.353 ms  125/3457 (3.6%)  
+[  5]  27.00-28.00  sec  4.66 MBytes  39.1 Mbits/sec  1.536 ms  82/3453 (2.4%)  
+[  5]  28.00-29.00  sec  4.61 MBytes  38.7 Mbits/sec  0.906 ms  114/3453 (3.3%)  
+[  5]  29.00-30.00  sec  4.61 MBytes  38.7 Mbits/sec  1.182 ms  116/3455 (3.4%)  
+[  5]  30.00-30.16  sec   728 KBytes  37.8 Mbits/sec  1.463 ms  18/533 (3.4%)  
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bitrate         Jitter    Lost/Total Datagrams
+[SUM]  0.0-30.2 sec  66072 datagrams received out-of-order
+[  5]   0.00-30.16  sec   135 MBytes  37.7 Mbits/sec  1.463 ms  5470/103588 (5.3%)  receiver
+iperf3: interrupt - the server has terminated
+-----------------------------------------------------------
+Server listening on 5201 (test #2)
+-----------------------------------------------------------

@@ -1,0 +1,9 @@
+scenario=a
+duration_s=30
+controller=127.0.0.1:6653
+h1_ip=10.0.0.1
+h2_ip=10.0.0.2
+bottleneck_dev=sp1-eth2
+qos_mode=none
+dump_ports=sp1-eth2
+pcap_ifs=
