@@ -1,0 +1,15 @@
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=37.553s, table=0, n_packets=15, n_bytes=900, priority=65535,dl_dst=01:80:c2:00:00:0e,dl_type=0x88cc actions=CONTROLLER:65535
+ cookie=0x0, duration=37.576s, table=0, n_packets=0, n_bytes=0, priority=30000,dl_type=0x88cc actions=drop
+ cookie=0x0, duration=37.576s, table=0, n_packets=10, n_bytes=760, priority=10000,ipv6 actions=drop
+ cookie=0x0, duration=37.576s, table=0, n_packets=5, n_bytes=210, priority=20500,arp actions=goto_table:1
+ cookie=0x0, duration=37.576s, table=0, n_packets=115429, n_bytes=171894000, priority=15000,ip actions=goto_table:1
+ cookie=0x0, duration=37.576s, table=0, n_packets=618, n_bytes=64500, priority=21000,icmp actions=goto_table:1
+ cookie=0x0, duration=37.576s, table=0, n_packets=0, n_bytes=0, priority=20000,ip,in_port=1,nw_tos=184 actions=push_mpls:0x8847,set_field:100->mpls_label,set_field:5->mpls_tc,goto_table:1
+ cookie=0x0, duration=37.576s, table=0, n_packets=0, n_bytes=0, priority=20000,ip,in_port=1,nw_tos=104 actions=push_mpls:0x8847,set_field:100->mpls_label,set_field:3->mpls_tc,goto_table:1
+ cookie=0x0, duration=37.576s, table=0, n_packets=46, n_bytes=6879, priority=20000,ip,in_port=1,nw_tos=0 actions=push_mpls:0x8847,set_field:100->mpls_label,set_field:0->mpls_tc,goto_table:1
+ cookie=0x0, duration=37.576s, table=0, n_packets=0, n_bytes=0, priority=0 actions=CONTROLLER:65535
+ cookie=0x0, duration=37.576s, table=0, n_packets=0, n_bytes=0, priority=1 actions=goto_table:1
+ cookie=0x0, duration=33.826s, table=1, n_packets=115735, n_bytes=171923876, idle_timeout=20, priority=100,dl_dst=9a:dc:07:e5:bb:fb actions=write_actions(output:1)
+ cookie=0x0, duration=33.792s, table=1, n_packets=360, n_bytes=41475, idle_timeout=20, priority=100,dl_dst=d6:9e:f2:2e:20:60 actions=write_actions(output:2)
+ cookie=0x0, duration=37.576s, table=1, n_packets=3, n_bytes=238, priority=0 actions=CONTROLLER:65535

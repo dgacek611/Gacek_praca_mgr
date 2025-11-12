@@ -1,0 +1,15 @@
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=37.361s, table=0, n_packets=12, n_bytes=720, priority=65535,dl_dst=01:80:c2:00:00:0e,dl_type=0x88cc actions=CONTROLLER:65535
+ cookie=0x0, duration=37.401s, table=0, n_packets=1, n_bytes=60, priority=30000,dl_type=0x88cc actions=drop
+ cookie=0x0, duration=37.401s, table=0, n_packets=15, n_bytes=1182, priority=10000,ipv6 actions=drop
+ cookie=0x0, duration=37.401s, table=0, n_packets=3, n_bytes=126, priority=20500,arp actions=goto_table:1
+ cookie=0x0, duration=37.401s, table=0, n_packets=115092, n_bytes=171595080, priority=20005,mpls actions=pop_mpls:0x0800,goto_table:1
+ cookie=0x0, duration=37.401s, table=0, n_packets=616, n_bytes=64304, priority=21000,icmp actions=goto_table:1
+ cookie=0x0, duration=37.401s, table=0, n_packets=0, n_bytes=0, priority=20000,ip,nw_tos=184 actions=push_mpls:0x8847,set_field:100->mpls_label,set_field:5->mpls_tc,goto_table:1
+ cookie=0x0, duration=37.401s, table=0, n_packets=0, n_bytes=0, priority=20000,ip,nw_tos=104 actions=push_mpls:0x8847,set_field:100->mpls_label,set_field:3->mpls_tc,goto_table:1
+ cookie=0x0, duration=37.401s, table=0, n_packets=63, n_bytes=8271, priority=20000,ip,nw_tos=0 actions=push_mpls:0x8847,set_field:100->mpls_label,set_field:0->mpls_tc,goto_table:1
+ cookie=0x0, duration=37.401s, table=0, n_packets=0, n_bytes=0, priority=0 actions=CONTROLLER:65535
+ cookie=0x0, duration=37.401s, table=0, n_packets=0, n_bytes=0, priority=1 actions=goto_table:1
+ cookie=0x0, duration=33.699s, table=1, n_packets=115396, n_bytes=171164448, idle_timeout=20, priority=100,dl_dst=3e:f4:2b:bb:dd:fb actions=write_actions(output:1)
+ cookie=0x0, duration=33.667s, table=1, n_packets=375, n_bytes=42727, idle_timeout=20, priority=100,dl_dst=52:f0:07:8b:70:94 actions=write_actions(output:2)
+ cookie=0x0, duration=37.401s, table=1, n_packets=3, n_bytes=238, priority=0 actions=CONTROLLER:65535

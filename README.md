@@ -29,6 +29,12 @@
 
 		QOS_MODE=meter ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /home/dorota/Gacek_praca_mgr/ryu_app/ryu_qos.py
 
+	D) 
+	
+		MPLS_MODE=uniform ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /home/dorota/Gacek_praca_mgr/ryu_app/ryu_mpls.py
+
+		MPLS_MODE=shortpipe ryu-manager --verbose --observe-links --ofp-tcp-listen-port 6653 /home/dorota/Gacek_praca_mgr/ryu_app/ryu_mpls.py
+
 3. SIEĆ I RUCH
 
 	A)
@@ -91,6 +97,16 @@
 			--scenario c \
 			--bottleneck-dev sp1-eth2 \
 			--log-dir /home/dorota/Gacek_praca_mgr/logs/scenario_C
+
+	D) 
+
+ 		sudo -E python3 /home/dorota/Gacek_praca_mgr/traffic/run_traffic_polska.py \
+		--topo-file /home/dorota/Gacek_praca_mgr/mininet_topo/polska_topo.py \
+		--controller-ip 127.0.0.1 --controller-port 6653 \
+		--duration 30\
+		--scenario a \
+		--log-dir /home/dorota/Gacek_praca_mgr/logs/scenario_D_short_pipe \
+		--pcap-ifs "sp1-eth1,sp1-eth2,sp2-eth2,sp2-eth1,s1-eth3,s1-eth2,s1-eth1"
 
 
 4. PLAN:

@@ -1,0 +1,18 @@
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=37.274s, table=0, n_packets=12, n_bytes=720, priority=65535,dl_dst=01:80:c2:00:00:0e,dl_type=0x88cc actions=CONTROLLER:65535
+ cookie=0x0, duration=37.333s, table=0, n_packets=0, n_bytes=0, priority=30000,dl_type=0x88cc actions=drop
+ cookie=0x0, duration=37.333s, table=0, n_packets=14, n_bytes=1096, priority=10000,ipv6 actions=drop
+ cookie=0x0, duration=37.333s, table=0, n_packets=4, n_bytes=168, priority=20500,arp actions=goto_table:1
+ cookie=0x0, duration=37.295s, table=0, n_packets=0, n_bytes=0, priority=20005,mpls actions=pop_mpls:0x0800,goto_table:1
+ cookie=0x0, duration=37.333s, table=0, n_packets=617, n_bytes=64402, priority=21000,icmp actions=goto_table:1
+ cookie=0x0, duration=37.333s, table=0, n_packets=0, n_bytes=0, priority=20010,mpls,mpls_tc=5 actions=pop_mpls:0x0800,set_field:46->ip_dscp,goto_table:1
+ cookie=0x0, duration=37.333s, table=0, n_packets=0, n_bytes=0, priority=20010,mpls,mpls_tc=3 actions=pop_mpls:0x0800,set_field:26->ip_dscp,goto_table:1
+ cookie=0x0, duration=37.333s, table=0, n_packets=308, n_bytes=27890, priority=20010,mpls,mpls_tc=0 actions=pop_mpls:0x0800,set_field:0->ip_dscp,goto_table:1
+ cookie=0x0, duration=37.333s, table=0, n_packets=0, n_bytes=0, priority=20000,ip,nw_tos=184 actions=push_mpls:0x8847,set_field:100->mpls_label,set_field:5->mpls_tc,goto_table:1
+ cookie=0x0, duration=37.333s, table=0, n_packets=103590, n_bytes=154347656, priority=20000,ip,nw_tos=104 actions=push_mpls:0x8847,set_field:100->mpls_label,set_field:3->mpls_tc,goto_table:1
+ cookie=0x0, duration=37.333s, table=0, n_packets=68, n_bytes=5408, priority=20000,ip,nw_tos=0 actions=push_mpls:0x8847,set_field:100->mpls_label,set_field:0->mpls_tc,goto_table:1
+ cookie=0x0, duration=37.333s, table=0, n_packets=0, n_bytes=0, priority=0 actions=CONTROLLER:65535
+ cookie=0x0, duration=37.333s, table=0, n_packets=0, n_bytes=0, priority=1 actions=goto_table:1
+ cookie=0x0, duration=33.725s, table=1, n_packets=619, n_bytes=61072, idle_timeout=20, priority=100,dl_dst=7a:88:c9:34:92:18 actions=write_actions(output:1)
+ cookie=0x0, duration=33.718s, table=1, n_packets=103962, n_bytes=154382856, idle_timeout=20, priority=100,dl_dst=f2:bd:d0:5c:e1:1f actions=write_actions(output:2)
+ cookie=0x0, duration=37.333s, table=1, n_packets=6, n_bytes=364, priority=0 actions=CONTROLLER:65535

@@ -18,9 +18,9 @@ from mininet.log import setLogLevel, info
 BOTTLENECK_DEV_DEFAULT = "sp1-eth2"
 
 # Domyślne szybkości strumieni iperf3 (w Mbit/s)
-IPERF_EF_MBIT = 50
-IPERF_AF_MBIT = 50
-IPERF_BE_MBIT = 50
+IPERF_EF_MBIT = 40
+IPERF_AF_MBIT = 40
+IPERF_BE_MBIT = 40
 
 # Wartości DSCP użyte w eksperymencie
 DSCP_EF = 46
@@ -407,7 +407,7 @@ def setup_qos_for_scenario(
         destroy_tc_root(dev)
         # Stałe limity dla kolejek EF/AF/BE (bit/s)
         queues = {
-            2: {"min": 40_000_000, "max": 40_000_000, "priority": 0, "burst": 200_000},   # EF (najwyższy priorytet)
+            2: {"min": 60_000_000, "max": 60_000_000, "priority": 0, "burst": 200_000},   # EF (najwyższy priorytet)
             1: {"min": 30_000_000, "max": 30_000_000, "priority": 1, "burst": 250_000},   # AF
             0: {"min": 10_000_000, "max": 10_000_000, "priority": 2, "burst": 250_000},   # BE
         }
@@ -449,37 +449,82 @@ def find_sp1_uplink(net: Mininet) -> Optional[str]:
 
 # ---------- traffic ----------
 
-def start_pcap(ifaces_csv: str, out_dir: str) -> List[int]:
+def _canon_ifname(name: str) -> str:
+    return name.split('@', 1)[0]
+
+def _iface_exists_root(iface: str) -> bool:
+    r = sh("ip -br link")
+    for line in r.stdout.splitlines():
+        if not line.strip():
+            continue
+        ifname = _canon_ifname(line.split()[0])
+        if ifname == iface:
+            return True
+    print("[PCAP] root ns interfejsy:",
+          ", ".join(_canon_ifname(l.split()[0]) for l in r.stdout.splitlines()))
+    return False
+
+def _iface_exists_in_host(h, iface: str) -> bool:
+    out = h.cmd("ip -br link")
+    return any(line.split()[0] == iface for line in out.splitlines())
+
+def start_pcap(net, ifaces_csv: str, out_dir: str, duration_hint: Optional[int] = None) -> List[int]:
     """
-    Uruchamia tcpdump na podanych interfejsach (CSV) i zapisuje pliki .pcap.
-    Zwraca listę PID-ów procesów tcpdump.
+    Startuje tcpdump na wielu interfejsach.
+    - root ns:  token 's2-eth1' (lub dowolny root IF)
+    - host ns:  token 'h1:eth0' (host:ifname)
+    Zwraca listę PID-ów tcpdumpów w root ns **i** w host ns (PID procesu tcpdump).
     """
     ifaces = [i.strip() for i in ifaces_csv.split(",") if i.strip()]
     pids: List[int] = []
 
-    for iface in ifaces:
-        pcap = os.path.join(out_dir, f"{iface}.pcap")
-        cmd = (
-            f"tcpdump -i {iface} -w {pcap} -U -s 96 "
-            f"not arp and not icmp & echo $!"
-        )
+    for token in ifaces:
+        # host namespace?
+        if ":" in token:
+            host_name, ifname = token.split(":", 1)
+            h = net.get(host_name)
+            if not _iface_exists_in_host(h, ifname):
+                print(f"[PCAP] WARN: {host_name}:{ifname} nie istnieje – pomijam")
+                continue
+            pcap = os.path.join(out_dir, f"{host_name}_{ifname}.pcap")
+            # uruchom tcpdump **w host namespace** (przez h.cmd)
+            cmd = f'tcpdump -i {ifname} -w {pcap} -U -s 128 -n "(mpls or ip)" >/dev/null 2>&1 & echo $!'
+            pid_str = h.cmd(cmd).strip().splitlines()[-1]
+            try:
+                pid = int(pid_str)
+                pids.append(pid)
+                print(f"[PCAP] {host_name}:{ifname} -> pid {pid}")
+            except Exception:
+                print(f"[PCAP] ERR: nie mogę odczytać PID dla {host_name}:{ifname} (got: {pid_str})")
+            continue
+
+        # root namespace (np. s1-eth2, s2-eth1, itp.)
+        ifname = token
+        if not _iface_exists_root(ifname):
+            print(f"[PCAP] WARN: {ifname} nie istnieje (root ns) – pomijam")
+            continue
+        pcap = os.path.join(out_dir, f"{ifname}.pcap")
+        # odpalamy w tle, zapisujemy PID z echo $!
+        cmd = f'bash -c \'tcpdump -i {ifname} -w {pcap} -U -s 128 -n "(mpls or ip)" >/dev/null 2>&1 & echo $!\''
         r = sh(cmd)
         try:
             pid = int(r.stdout.strip().splitlines()[-1])
             pids.append(pid)
+            print(f"[PCAP] {ifname} (root) -> pid {pid}")
         except Exception:
-            # Jeśli nie uda się sparsować PID – pomijamy ten interfejs
-            pass
-
+            print(f"[PCAP] ERR: nie mogę odczytać PID dla {ifname} (got: {r.stdout!r})")
     return pids
 
-
 def stop_pcap(pids: List[int]) -> None:
-    """
-    Kończy działanie tcpdump na podstawie listy PID-ów (SIGINT).
-    """
+    # SIGINT ładnie zamyka pliki PCAP. Jeśli coś nie zginie – SIGKILL po chwili.
+    import time as _t
     for pid in pids:
         sh(f"kill -2 {pid} 2>/dev/null")
+    _t.sleep(0.5)
+    for pid in pids:
+        sh(f"kill -0 {pid} 2>/dev/null || true")  # żyje?
+        # jeśli żyje – dobij
+        sh(f"kill -9 {pid} 2>/dev/null || true")
 
 
 def start_iperf_servers(h2, server_dir: str) -> Dict[int, str]:
@@ -513,9 +558,9 @@ def run_iperf_clients(
     Logi w formacie JSON zapisywane są w client_dir.
     """
     flows = [
-        {"name": "ef",   "port": 5201, "mbit": ef_mbit, "dscp": DSCP_EF},
+        # {"name": "ef",   "port": 5201, "mbit": ef_mbit, "dscp": DSCP_EF},
         {"name": "af31", "port": 5202, "mbit": af_mbit, "dscp": DSCP_AF31},
-        {"name": "be",   "port": 5203, "mbit": be_mbit, "dscp": DSCP_BE},
+        # {"name": "be",   "port": 5203, "mbit": be_mbit, "dscp": DSCP_BE},
     ]
 
     for f in flows:
@@ -816,8 +861,7 @@ def main() -> None:
     # Opcjonalne nagrywanie ruchu tcpdumpem
     pcap_pids: List[int] = []
     if getattr(args, "pcap_ifs", "").strip():
-        pcap_pids = start_pcap(args.pcap_ifs, pcap_dir)
-
+        pcap_pids = start_pcap(net, args.pcap_ifs, pcap_dir, duration_hint=args.duration)
     info("\n=== Start klientów iperf3 ===\n")
 
     # Hosty końcowe
