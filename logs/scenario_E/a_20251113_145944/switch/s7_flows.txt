@@ -1,0 +1,35 @@
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=38.981s, table=0, n_packets=56, n_bytes=3360, priority=65535,dl_dst=01:80:c2:00:00:0e,dl_type=0x88cc actions=CONTROLLER:65535
+ cookie=0x0, duration=39.012s, table=0, n_packets=1, n_bytes=60, priority=30000,dl_type=0x88cc actions=drop
+ cookie=0x0, duration=39.012s, table=0, n_packets=22, n_bytes=1732, priority=10000,ipv6 actions=drop
+ cookie=0x0, duration=39.012s, table=0, n_packets=0, n_bytes=0, priority=20500,arp actions=goto_table:1
+ cookie=0x0, duration=39.012s, table=0, n_packets=1, n_bytes=98, priority=21000,icmp actions=goto_table:1
+ cookie=0x0, duration=39.012s, table=0, n_packets=0, n_bytes=0, priority=0 actions=CONTROLLER:65535
+ cookie=0x0, duration=39.012s, table=0, n_packets=0, n_bytes=0, priority=1 actions=goto_table:1
+ cookie=0x0, duration=39.012s, table=1, n_packets=1, n_bytes=98, priority=0 actions=CONTROLLER:65535
+OFPST_GROUP_DESC reply (OF1.3) (xid=0x2):
+OFPST_GROUP reply (OF1.3) (xid=0x6):
+OFPT_FEATURES_REPLY (OF1.3) (xid=0x2): dpid:0000000000000007
+n_tables:254, n_buffers:0
+capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS
+OFPST_PORT_DESC reply (OF1.3) (xid=0x3):
+ 1(s7-eth1): addr:8a:f4:7f:d3:0c:85
+     config:     0
+     state:      LIVE
+     current:    10GB-FD COPPER
+     speed: 10000 Mbps now, 0 Mbps max
+ 2(s7-eth2): addr:ca:94:74:5b:04:d1
+     config:     0
+     state:      LIVE
+     current:    10GB-FD COPPER
+     speed: 10000 Mbps now, 0 Mbps max
+ 3(s7-eth3): addr:b2:40:5a:6f:08:ff
+     config:     0
+     state:      LIVE
+     current:    10GB-FD COPPER
+     speed: 10000 Mbps now, 0 Mbps max
+ LOCAL(s7): addr:f2:b2:c6:f0:cf:49
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max
+OFPT_GET_CONFIG_REPLY (OF1.3) (xid=0x5): frags=normal miss_send_len=0

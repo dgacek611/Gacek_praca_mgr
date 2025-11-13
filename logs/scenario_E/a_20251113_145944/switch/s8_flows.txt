@@ -1,0 +1,37 @@
+OFPST_FLOW reply (OF1.3) (xid=0x2):
+ cookie=0x0, duration=39.005s, table=0, n_packets=57, n_bytes=3420, priority=65535,dl_dst=01:80:c2:00:00:0e,dl_type=0x88cc actions=CONTROLLER:65535
+ cookie=0x0, duration=39.036s, table=0, n_packets=0, n_bytes=0, priority=30000,dl_type=0x88cc actions=drop
+ cookie=0x0, duration=39.036s, table=0, n_packets=22, n_bytes=1732, priority=10000,ipv6 actions=drop
+ cookie=0x0, duration=39.036s, table=0, n_packets=0, n_bytes=0, priority=20500,arp actions=goto_table:1
+ cookie=0x0, duration=39.036s, table=0, n_packets=1, n_bytes=98, priority=21000,icmp actions=goto_table:1
+ cookie=0x0, duration=39.036s, table=0, n_packets=62994, n_bytes=94111592, priority=20025,mpls,in_port=2,mpls_label=100,mpls_tc=0 actions=output:3
+ cookie=0x0, duration=39.036s, table=0, n_packets=0, n_bytes=0, priority=20025,mpls,in_port=3,mpls_label=100,mpls_tc=0 actions=output:2
+ cookie=0x0, duration=39.036s, table=0, n_packets=0, n_bytes=0, priority=0 actions=CONTROLLER:65535
+ cookie=0x0, duration=39.036s, table=0, n_packets=0, n_bytes=0, priority=1 actions=goto_table:1
+ cookie=0x0, duration=39.036s, table=1, n_packets=1, n_bytes=98, priority=0 actions=CONTROLLER:65535
+OFPST_GROUP_DESC reply (OF1.3) (xid=0x2):
+OFPST_GROUP reply (OF1.3) (xid=0x6):
+OFPT_FEATURES_REPLY (OF1.3) (xid=0x2): dpid:0000000000000008
+n_tables:254, n_buffers:0
+capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS
+OFPST_PORT_DESC reply (OF1.3) (xid=0x3):
+ 1(s8-eth1): addr:8a:ba:74:86:0a:d5
+     config:     0
+     state:      LIVE
+     current:    10GB-FD COPPER
+     speed: 10000 Mbps now, 0 Mbps max
+ 2(s8-eth2): addr:3a:7c:b3:52:6f:37
+     config:     0
+     state:      LIVE
+     current:    10GB-FD COPPER
+     speed: 10000 Mbps now, 0 Mbps max
+ 3(s8-eth3): addr:32:ab:e1:c4:5f:0c
+     config:     0
+     state:      LIVE
+     current:    10GB-FD COPPER
+     speed: 10000 Mbps now, 0 Mbps max
+ LOCAL(s8): addr:02:64:d2:54:52:42
+     config:     PORT_DOWN
+     state:      LINK_DOWN
+     speed: 0 Mbps now, 0 Mbps max
+OFPT_GET_CONFIG_REPLY (OF1.3) (xid=0x5): frags=normal miss_send_len=0

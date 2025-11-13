@@ -1,0 +1,10 @@
+# PASS/FAIL w oknie awarii (iPerf)
+EF: PASS (min=40.00 Mbps >= 28.00)
+AF: FAIL (min=40.00 Mbps > 0.10)
+BE: FAIL (min=40.00 Mbps > 0.10)
+
+Okno analizy: [8.00s, 12.00s]
+
+# FF verification (group stats)
+FF: FAIL
+- FF_VERIFY_DISABLED

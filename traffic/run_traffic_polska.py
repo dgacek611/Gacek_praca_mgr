@@ -558,9 +558,9 @@ def run_iperf_clients(
     Logi w formacie JSON zapisywane są w client_dir.
     """
     flows = [
-        # {"name": "ef",   "port": 5201, "mbit": ef_mbit, "dscp": DSCP_EF},
+        {"name": "ef",   "port": 5201, "mbit": ef_mbit, "dscp": DSCP_EF},
         {"name": "af31", "port": 5202, "mbit": af_mbit, "dscp": DSCP_AF31},
-        # {"name": "be",   "port": 5203, "mbit": be_mbit, "dscp": DSCP_BE},
+        {"name": "be",   "port": 5203, "mbit": be_mbit, "dscp": DSCP_BE},
     ]
 
     for f in flows:

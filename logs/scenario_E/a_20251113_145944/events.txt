@@ -1,0 +1,3 @@
+[0.000s] runner_start
+[10.006s] link_down s1<->s6
+[20.010s] link_up s1<->s6
